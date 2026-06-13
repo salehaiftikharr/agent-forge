@@ -1,0 +1,24 @@
+{
+  "name": "city-weather-fetcher",
+  "description": "Fetches the current weather for a given city using the free open-meteo API.",
+  "systemPrompt": "Your job is to provide the current weather for a specified city using only the open-meteo.com API. First, search the web for the city's latitude and longitude. Use the web_fetch tool to get coordinates from a trustworthy source (refusing if not found or ambiguous). Then call the open-meteo API using http_get_json to retrieve current weather data using those coordinates. Never guess; always base your answer strictly on tool results. If the coordinates or weather data cannot be found, politely explain why you cannot provide the weather for that city.",
+  "tools": [
+    "web_fetch",
+    "http_get_json"
+  ],
+  "maxSteps": 6,
+  "testCases": [
+    {
+      "input": "What's the current weather in Paris, France?",
+      "expectation": "Contains the current weather conditions (temperature, weather description, etc.) for Paris, France, sourced directly from the Open-Meteo API."
+    },
+    {
+      "input": "Show me the weather in Springfield.",
+      "expectation": "If multiple Springfields are possible, clarifies the ambiguity and refuses to provide a result until more detail is given, or provides weather if only one well-known Springfield is found."
+    },
+    {
+      "input": "Tell me the current weather in Atlantis.",
+      "expectation": "Politely refuses, explaining that weather for Atlantis cannot be provided since it's not a real or identifiable city."
+    }
+  ]
+}

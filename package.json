@@ -1,0 +1,22 @@
+{
+  "name": "agent-forge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An agent that builds agents: a plain-English description becomes a runnable, self-tested Claude agent.",
+  "scripts": {
+    "forge": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.79",
+    "@ai-sdk/openai": "^3.0.65",
+    "ai": "^6.0.191",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.22.4",
+    "typescript": "^5"
+  }
+}

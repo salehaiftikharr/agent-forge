@@ -1,0 +1,10 @@
+node_modules
+.env
+.env.local
+.env.*.local
+
+# Built agent specs are user artifacts; the committed examples/ folder shows the shape.
+/agents/*.json
+# (examples/ is committed on purpose — it's the demo)
+
+*.tsbuildinfo
