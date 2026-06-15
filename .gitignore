@@ -8,3 +8,8 @@ node_modules
 # (examples/ is committed on purpose — it's the demo)
 
 *.tsbuildinfo
+
+# minion working copies (regenerated each run)
+/.minion-runs/
+# minion receipts are artifacts; committed examples live in examples/
+/minion-receipts/

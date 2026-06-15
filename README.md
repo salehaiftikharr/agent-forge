@@ -40,6 +40,73 @@ Receipt — "city-weather-fetcher": ✓ passing (3/3) via openai/gpt-4.1
 
 Both receipts are committed in [`examples/`](examples/).
 
+---
+
+## Minions — autonomous, *verified* ticket-closers
+
+Forge is the factory; **minions are what it makes.** A minion is an autonomous
+agent that picks up one ticket, fixes it on a sandbox copy of the repo, **runs
+the tests**, and ships a branch + diff + receipt — *only* if the fix turns a
+failing test green **without breaking anything**. If it can't, it declines.
+
+```
+$ forge minion all
+
+▶ [TICKET-001] slugify collapses consecutive spaces into one dash
+✓ shipped   (3/6 tests) · branch minion/ticket-001
+▶ [TICKET-002] Add a clamp(n, min, max) helper
+✓ shipped   (3/6 tests) · branch minion/ticket-002
+▶ [TICKET-003] parseQueryString should URL-decode values and handle valueless keys
+✓ shipped   (3/6 tests) · branch minion/ticket-003
+▶ [TICKET-004] User reports add(2, 2) should equal 5
+⊘ declined  — won't break the passing add() test to satisfy a bogus report
+
+— fleet done: 3 shipped, 1 declined, 4 total —
+```
+
+**What makes these different from "an agent that opens PRs":** the verification
+is real and the agent can't game it.
+
+- **The gate is the test suite, re-run by the harness — never the model's word.**
+  A ticket ships only if a previously-failing test is now green *and* no test
+  that was passing has regressed (tracked per-test, by name).
+- **A minion can read the tests but cannot write them.** The workspace
+  physically refuses writes to the test directory, so a minion can't "pass" by
+  editing the gate it's judged against.
+- **It declines bad work.** TICKET-004 is a bogus report ("add(2,2) should be
+  5") — satisfying it would regress a passing test, so the minion declines
+  rather than ship a regression. *Knowing when not to proceed is the feature.*
+- **Every run leaves a receipt** — baseline vs. final tests, steps taken, the
+  diff, and the ship/decline decision with its reason. Committed examples:
+  [shipped](examples/minions/TICKET-001-shipped.json) ·
+  [declined](examples/minions/TICKET-004-declined.json).
+
+It writes only inside a per-ticket sandbox copy (`.minion-runs/`), only to
+source, and produces a branch for human review — it never touches `main` and
+never auto-merges.
+
+```bash
+forge tickets                 # the sandbox's open tickets
+forge minion TICKET-001       # set one minion on one ticket
+forge minion all              # the whole fleet
+```
+
+### How a minion works
+
+```
+ticket → fresh sandbox copy (git branch) → agent loop:
+            read code + tests · edit SOURCE only · run tests · iterate
+         → harness re-runs tests (ground truth)
+         → gate: a failing test went green AND nothing regressed?
+         → judge: is the diff a legitimate, minimal fix (not gamed)?
+         → SHIP (commit to branch) + receipt, or DECLINE + receipt
+```
+
+Built on Forge's engine — the model seam, the agent loop, and the
+judge are the same pieces `build`/`refine` use. New in `src/minion/`:
+`workspace.ts` (the sandbox boundary + test runner), `tools.ts` (the
+write-capable tools), `minion.ts` (the loop + gates).
+
 ## Why this shape
 
 An agent that writes agents is easy to make impressive in a demo and hard to

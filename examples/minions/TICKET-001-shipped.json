@@ -1,0 +1,21 @@
+{
+  "ticketId": "TICKET-001",
+  "title": "slugify collapses consecutive spaces into one dash",
+  "model": "anthropic/claude-opus-4-8",
+  "branch": "minion/ticket-001",
+  "steps": 5,
+  "toolCalls": 5,
+  "baselineTests": {
+    "passed": 2,
+    "total": 6
+  },
+  "status": "shipped",
+  "reason": "Replacing /  /g with /\\s+/g correctly collapses any run of whitespace into a single dash while preserving existing single-space behavior.",
+  "finalTests": {
+    "ok": false,
+    "passed": 3,
+    "failed": 3,
+    "total": 6
+  },
+  "patch": "diff --git a/src/utils.js b/src/utils.js\nindex b7a7837..b6f68be 100644\n--- a/src/utils.js\n+++ b/src/utils.js\n@@ -8,9 +8,7 @@ export function add(a, b) {\n }\n \n export function slugify(input) {\n-  // BUG (TICKET-001): a run of consecutive spaces becomes multiple dashes\n-  // instead of one.\n-  return String(input).trim().toLowerCase().replace(/ /g, \"-\");\n+  return String(input).trim().toLowerCase().replace(/\\s+/g, \"-\");\n }\n \n export function parseQueryString(qs) {"
+}

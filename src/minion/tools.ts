@@ -1,0 +1,72 @@
+import { tool, type Tool } from "ai";
+import { z } from "zod";
+import type { Workspace } from "./workspace";
+
+/**
+ * The write-capable tools a minion acts through — all bound to one Workspace,
+ * so every file op and test run is confined to that ticket's sandbox. The
+ * `write_file` tool surfaces the "no editing tests" rule back to the model as a
+ * tool error it can read and adapt to, rather than silently failing.
+ */
+export function minionTools(ws: Workspace): Record<string, Tool> {
+  return {
+    list_files: tool({
+      description:
+        "List all files in the repository (source and tests), so you can see what's there.",
+      inputSchema: z.object({}),
+      execute: async () => ({ files: ws.listFiles() }),
+    }),
+
+    read_file: tool({
+      description:
+        "Read a file's full contents. Read the relevant source AND the failing test so you know the exact expected behavior.",
+      inputSchema: z.object({
+        path: z.string().describe("Repo-relative path, e.g. src/utils.js"),
+      }),
+      execute: async ({ path }) => {
+        try {
+          return { ok: true, content: ws.read(path) };
+        } catch (error) {
+          return { ok: false, error: errMsg(error) };
+        }
+      },
+    }),
+
+    write_file: tool({
+      description:
+        "Overwrite a SOURCE file with new contents. You cannot write to test files — those are the acceptance gate. Make the minimal change that resolves the ticket.",
+      inputSchema: z.object({
+        path: z.string().describe("Repo-relative source path, e.g. src/utils.js"),
+        content: z.string().describe("The complete new file contents."),
+      }),
+      execute: async ({ path, content }) => {
+        try {
+          ws.write(path, content);
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: errMsg(error) };
+        }
+      },
+    }),
+
+    run_tests: tool({
+      description:
+        "Run the full test suite and get the result. A fix is only acceptable when ALL tests pass — the ticket's and the pre-existing ones. Use this to check your work and iterate.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const r = ws.runTests();
+        return {
+          allPassing: r.ok,
+          passed: r.passed,
+          failed: r.failed,
+          total: r.total,
+          output: r.output.slice(-3000),
+        };
+      },
+    }),
+  };
+}
+
+function errMsg(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

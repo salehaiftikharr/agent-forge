@@ -14,12 +14,15 @@
  *        --repair                      (build only) run the self-repair loop after building
  *        --rounds <n>                  max repair rounds (default 3)
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { loadEnv } from "./env";
 import { modelLabel } from "./model";
 import { buildAgent } from "./builder";
 import { runAgent } from "./runtime";
 import { testAgent } from "./judge";
 import { refineAgent } from "./refine";
+import { runMinion, type Ticket, type MinionReceipt } from "./minion/minion";
 import {
   saveSpec,
   loadSpec,
@@ -28,6 +31,23 @@ import {
   loadReceipt,
   type Receipt,
 } from "./spec";
+
+function loadTickets(): Ticket[] {
+  const file = path.join(process.cwd(), "sandbox", "tickets.json");
+  return JSON.parse(readFileSync(file, "utf8")) as Ticket[];
+}
+
+function printMinionReceipt(r: MinionReceipt): void {
+  const mark =
+    r.status === "shipped" ? "✓ shipped" : r.status === "declined" ? "⊘ declined" : "✗ error";
+  console.log(
+    `${mark}  [${r.ticketId}] ${r.title}  (${r.finalTests.passed}/${r.finalTests.total} tests) via ${r.model}`,
+  );
+  console.log(`  ${r.reason}`);
+  if (r.status === "shipped") {
+    console.log(`  branch: ${r.branch} · ${r.steps} steps, ${r.toolCalls} tool calls`);
+  }
+}
 
 loadEnv();
 
@@ -138,6 +158,47 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "tickets": {
+      const tickets = loadTickets();
+      for (const t of tickets) {
+        console.log(`${t.id.padEnd(12)} ${t.title}`);
+      }
+      console.log(`\n${tickets.length} ticket(s) in the sandbox.`);
+      break;
+    }
+
+    case "minion": {
+      const [target] = rest;
+      if (!target) fail('Usage: forge minion <TICKET-ID | all>');
+      const tickets = loadTickets();
+      const queue =
+        target.toLowerCase() === "all"
+          ? tickets
+          : tickets.filter((t) => t.id.toLowerCase() === target.toLowerCase());
+      if (!queue.length) fail(`No ticket "${target}". Try: forge tickets`);
+
+      const receipts: MinionReceipt[] = [];
+      for (const ticket of queue) {
+        console.log(`\n▶ [${ticket.id}] ${ticket.title}`);
+        const receipt = await runMinion(ticket, {
+          provider,
+          onProgress: (m) => console.log(`  ${m}`),
+        });
+        console.log("");
+        printMinionReceipt(receipt);
+        receipts.push(receipt);
+      }
+
+      if (receipts.length > 1) {
+        const shipped = receipts.filter((r) => r.status === "shipped").length;
+        const declined = receipts.filter((r) => r.status === "declined").length;
+        console.log(
+          `\n— fleet done: ${shipped} shipped, ${declined} declined, ${receipts.length} total —`,
+        );
+      }
+      break;
+    }
+
     case "run": {
       const [name, ...inputParts] = rest;
       const input = inputParts.join(" ").trim();
@@ -211,6 +272,9 @@ async function main(): Promise<void> {
           "  forge receipt <name>          print the build → test → repair record",
           "  forge list                    list built agents",
           "  forge show <name>             print an agent's spec",
+          "",
+          "  forge tickets                 list the sandbox tickets",
+          "  forge minion <TICKET-ID|all>  set a minion to close ticket(s) autonomously",
           "",
           "  --provider anthropic|openai   override the configured provider",
           "  --rounds <n>                  max repair rounds (default 3)",
