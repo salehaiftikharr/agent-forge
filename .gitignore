@@ -13,3 +13,4 @@ node_modules
 /.minion-runs/
 # minion receipts are artifacts; committed examples live in examples/
 /minion-receipts/
+/minion-evals/

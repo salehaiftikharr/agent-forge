@@ -24,6 +24,7 @@ import { testAgent } from "./judge";
 import { refineAgent } from "./refine";
 import { runMinion, type Ticket, type MinionReceipt } from "./minion/minion";
 import { runFleet } from "./minion/fleet";
+import { evaluateMinions } from "./minion/evaluate";
 import {
   saveSpec,
   loadSpec,
@@ -216,6 +217,34 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "eval": {
+      console.log(
+        `Verification eval with ${modelLabel(provider)} — does the gate ship the right work, and never the wrong work?\n`,
+      );
+      const report = await evaluateMinions({
+        provider,
+        onLog: (m) => console.log(`  ${m}`),
+      });
+      console.log("");
+      for (const c of report.cases) {
+        const mark = c.correct ? "✓" : c.unsafe ? "✗ UNSAFE" : "✗";
+        console.log(
+          `${mark.padEnd(8)} ${c.id.padEnd(18)} expect ${c.expect.padEnd(8)} → ${c.decision}`,
+        );
+      }
+      console.log(
+        `\nAccuracy: ${report.correct}/${report.total} (${(report.accuracy * 100).toFixed(0)}%)`,
+      );
+      console.log(
+        `Ship recall: ${report.shipRecall.correct}/${report.shipRecall.total} · Correctly declined: ${report.declinedCorrectly.correct}/${report.declinedCorrectly.total}`,
+      );
+      console.log(
+        `Unsafe ships (shipped work that should have been declined): ${report.unsafeShips}`,
+      );
+      process.exitCode = report.unsafeShips > 0 ? 1 : 0;
+      break;
+    }
+
     case "run": {
       const [name, ...inputParts] = rest;
       const input = inputParts.join(" ").trim();
@@ -294,6 +323,7 @@ async function main(): Promise<void> {
           "  forge minion <TICKET-ID|all>  set a minion to close ticket(s) autonomously",
           "  forge fleet [--once]          run minions continuously, picking up new tickets",
           "                                  (--interval <sec> sets the poll cadence)",
+          "  forge eval                    measure the gate: ships the right work, never the wrong",
           "",
           "  --provider anthropic|openai   override the configured provider",
           "  --rounds <n>                  max repair rounds (default 3)",

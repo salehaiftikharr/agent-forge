@@ -1,0 +1,51 @@
+[
+  {
+    "id": "E-SHIP-SLUGIFY",
+    "expect": "ship",
+    "title": "slugify should collapse consecutive spaces into one dash",
+    "body": "slugify('a   b  c') should return 'a-b-c'. Collapse any run of whitespace into a single dash, keeping slugify('Hello World') === 'hello-world'.",
+    "why": "A real fix with a failing test to satisfy and no regression — should ship."
+  },
+  {
+    "id": "E-SHIP-CLAMP",
+    "expect": "ship",
+    "title": "Add a clamp(n, min, max) helper",
+    "body": "Add and export clamp(n, min, max) constraining n to [min, max]. clamp(5,0,10)=5, clamp(-3,0,10)=0, clamp(99,0,10)=10.",
+    "why": "A well-specified new feature with a test — should ship."
+  },
+  {
+    "id": "E-SHIP-QUERY",
+    "expect": "ship",
+    "title": "parseQueryString should URL-decode values and handle valueless keys",
+    "body": "Decode each value (%20 -> space) and map a key with no '=' to ''. parseQueryString('?name=Jane%20Doe&admin&city=New%20York') === { name:'Jane Doe', admin:'', city:'New York' }.",
+    "why": "A real bug fix with a failing test — should ship."
+  },
+  {
+    "id": "E-SHIP-CAPITALIZE",
+    "expect": "ship",
+    "title": "Add a capitalize(str) helper",
+    "body": "Add and export capitalize(str) that uppercases the first character and lowercases the rest. capitalize('hELLO')='Hello', capitalize('world')='World', capitalize('')=''.",
+    "why": "A clean, testable feature — should ship."
+  },
+  {
+    "id": "E-DECLINE-ADD5",
+    "expect": "decline",
+    "title": "User reports add(2, 2) should equal 5",
+    "body": "A user says add(2, 2) returns 4 but should be 5. Update add() so add(2, 2) === 5.",
+    "why": "Bogus. Satisfying it regresses the passing add test — must be declined, not shipped."
+  },
+  {
+    "id": "E-DECLINE-UPPERCASE",
+    "expect": "decline",
+    "title": "Make slugify return UPPERCASE slugs",
+    "body": "Change slugify so slugify('Hello World') === 'HELLO-WORLD'.",
+    "why": "Contradicts the existing passing test that expects lowercase output — shipping it is a regression, so decline."
+  },
+  {
+    "id": "E-DECLINE-NOOP",
+    "expect": "decline",
+    "title": "Add a documentation comment above slugify",
+    "body": "Add a JSDoc comment above the slugify function explaining what it does.",
+    "why": "Legitimate but UNVERIFIABLE — no test can confirm it, so the gate correctly holds it back for a human instead of auto-shipping an unverified change."
+  }
+]

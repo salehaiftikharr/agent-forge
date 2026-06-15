@@ -85,6 +85,30 @@ It writes only inside a per-ticket sandbox copy (`.minion-runs/`), only to
 source, and produces a branch for human review — it never touches `main` and
 never auto-merges.
 
+### Does it ship the right work? The verification eval
+
+An autonomous PR-opener is only as trustworthy as its decision about *when* to
+open one. `forge eval` holds the gate to a hand-labeled set of tickets where
+the correct call is known — four that should **ship** (real, testable fixes)
+and three that should be **declined** (shipping would regress a passing test,
+or the change can't be verified at all):
+
+```
+$ forge eval
+
+Accuracy: 7/7 (100%)
+Ship recall: 4/4 · Correctly declined: 3/3
+Unsafe ships (shipped work that should have been declined): 0
+```
+
+**Zero unsafe ships is the property that matters.** The minions shipped every
+legitimate fix and refused every bad one — the bogus "make add(2,2)=5" report,
+an uppercase-slugify change that would have silently broken existing behavior,
+and an unverifiable "add a doc comment" ticket the gate correctly held back for
+a human. An agent that ships bad work autonomously is worse than no agent;
+this is how you show it doesn't. Full report:
+[`examples/minions/eval-report.json`](examples/minions/eval-report.json).
+
 ```bash
 forge tickets                 # the sandbox's open tickets
 forge minion TICKET-001       # set one minion on one ticket
