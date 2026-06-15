@@ -3,7 +3,7 @@ import { z } from "zod";
 import path from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { getModel, modelLabel } from "../model";
-import { prepareWorkspace, type TestResult } from "./workspace";
+import { prepareWorkspace, type TestResult, type Workspace } from "./workspace";
 import { minionTools } from "./tools";
 
 /**
@@ -38,6 +38,8 @@ export interface MinionReceipt {
   baselineTests: { passed: number; total: number };
   finalTests: { ok: boolean; passed: number; failed: number; total: number };
   patch: string;
+  /** Set when the minion opened a real pull request (the GitHub path). */
+  prUrl?: string;
 }
 
 const SANDBOX_DIR = path.join(process.cwd(), "sandbox");
@@ -85,25 +87,33 @@ async function judgeChange(
   return object;
 }
 
-export async function runMinion(
+export interface Decision {
+  /** "approved" = passed every gate, ready for the caller to ship. */
+  status: "approved" | "declined" | "error";
+  reason: string;
+  patch: string;
+  baseline: TestResult;
+  finalTests: TestResult;
+  steps: number;
+  toolCalls: number;
+}
+
+/**
+ * The reusable core: run a minion against a ticket on an already-prepared
+ * Workspace — a sandbox copy OR a real cloned repo on a fresh branch — apply
+ * the gates, and return the decision. The caller decides what "approved" means:
+ * commit locally (sandbox) or commit + push + open a PR (GitHub). The gates are
+ * identical either way, which is the point — the same verification that makes
+ * the sandbox demo trustworthy is what guards a real pull request.
+ */
+export async function workTicket(
+  workspace: Workspace,
   ticket: Ticket,
   opts: { provider?: string; maxSteps?: number; onProgress?: (m: string) => void } = {},
-): Promise<MinionReceipt> {
+): Promise<Decision> {
   const log = opts.onProgress ?? (() => {});
-  const { workspace, branch } = prepareWorkspace(SANDBOX_DIR, RUNS_DIR, ticket.id);
-
   const baseline = workspace.runTests();
   log(`baseline: ${baseline.passed}/${baseline.total} tests passing`);
-
-  const base: Omit<MinionReceipt, "status" | "reason" | "finalTests" | "patch"> = {
-    ticketId: ticket.id,
-    title: ticket.title,
-    model: modelLabel(opts.provider),
-    branch,
-    steps: 0,
-    toolCalls: 0,
-    baselineTests: { passed: baseline.passed, total: baseline.total },
-  };
 
   let steps = 0;
   let toolCalls = 0;
@@ -119,77 +129,93 @@ export async function runMinion(
     steps = result.steps.length;
     toolCalls = result.steps.flatMap((s) => s.toolCalls ?? []).length;
   } catch (error) {
-    return finalize(base, {
+    return {
       status: "error",
       reason: error instanceof Error ? error.message : String(error),
-      finalTests: testToReceipt(baseline),
       patch: "",
-    });
+      baseline,
+      finalTests: baseline,
+      steps,
+      toolCalls,
+    };
   }
-  base.steps = steps;
-  base.toolCalls = toolCalls;
 
   // Ground truth: re-run the tests ourselves. Never trust the model's claim.
   const finalTests = workspace.runTests();
   const patch = workspace.stagedDiff();
   log(`final: ${finalTests.passed}/${finalTests.total} passing — verifying…`);
 
-  // Gate 1: no regressions, and real progress. A legitimate fix turns a
-  // failing test green WITHOUT breaking any test that was passing at baseline.
   const regressions = Object.keys(baseline.tests).filter(
     (name) => baseline.tests[name] && finalTests.tests[name] === false,
   );
   const newPasses = Object.keys(finalTests.tests).filter(
     (name) => finalTests.tests[name] && baseline.tests[name] === false,
   );
+  const decided = (status: Decision["status"], reason: string): Decision => ({
+    status,
+    reason,
+    patch,
+    baseline,
+    finalTests,
+    steps,
+    toolCalls,
+  });
+
+  // Gate 1: no regressions, and real progress.
   if (regressions.length > 0) {
-    return finalize(base, {
-      status: "declined",
-      reason: `Would break previously-passing test(s): ${regressions.join("; ")}. The ticket can't be satisfied without a regression, so it's declined rather than shipped.`,
-      finalTests: testToReceipt(finalTests),
-      patch,
-    });
+    return decided(
+      "declined",
+      `Would break previously-passing test(s): ${regressions.join("; ")}. Declined rather than ship a regression.`,
+    );
   }
   if (newPasses.length === 0) {
-    return finalize(base, {
-      status: "declined",
-      reason:
-        "No previously-failing test was turned green — the change doesn't actually close the ticket.",
-      finalTests: testToReceipt(finalTests),
-      patch,
-    });
+    return decided(
+      "declined",
+      "No previously-failing test was turned green — the change doesn't actually close the ticket.",
+    );
   }
 
   // Gate 2: the change must be a legitimate, minimal fix, not gamed.
   const verdict = await judgeChange(ticket, patch, opts.provider);
   if (!verdict.genuinelyResolves) {
-    return finalize(base, {
-      status: "declined",
-      reason: `Tests pass, but the change was rejected on review: ${verdict.reason}`,
-      finalTests: testToReceipt(finalTests),
-      patch,
-    });
+    return decided(
+      "declined",
+      `Tests pass, but the change was rejected on review: ${verdict.reason}`,
+    );
   }
+  return decided("approved", verdict.reason);
+}
 
-  // Ship it: commit onto the minion branch.
-  workspace.commit(`${ticket.id}: ${ticket.title}`);
-  return finalize(base, {
-    status: "shipped",
-    reason: verdict.reason,
-    finalTests: testToReceipt(finalTests),
-    patch,
+/** Run a minion on a sandbox copy (the local demo path). */
+export async function runMinion(
+  ticket: Ticket,
+  opts: { provider?: string; maxSteps?: number; onProgress?: (m: string) => void } = {},
+): Promise<MinionReceipt> {
+  const { workspace, branch } = prepareWorkspace(SANDBOX_DIR, RUNS_DIR, ticket.id);
+  const decision = await workTicket(workspace, ticket, opts);
+  if (decision.status === "approved") {
+    workspace.commit(`${ticket.id}: ${ticket.title}`);
+  }
+  return writeReceipt({
+    ticketId: ticket.id,
+    title: ticket.title,
+    model: modelLabel(opts.provider),
+    status: decision.status === "approved" ? "shipped" : decision.status,
+    reason: decision.reason,
+    branch,
+    steps: decision.steps,
+    toolCalls: decision.toolCalls,
+    baselineTests: { passed: decision.baseline.passed, total: decision.baseline.total },
+    finalTests: testToReceipt(decision.finalTests),
+    patch: decision.patch,
   });
 }
 
-function testToReceipt(t: TestResult) {
+export function testToReceipt(t: TestResult) {
   return { ok: t.ok, passed: t.passed, failed: t.failed, total: t.total };
 }
 
-function finalize(
-  base: Omit<MinionReceipt, "status" | "reason" | "finalTests" | "patch">,
-  rest: Pick<MinionReceipt, "status" | "reason" | "finalTests" | "patch">,
-): MinionReceipt {
-  const receipt: MinionReceipt = { ...base, ...rest };
+export function writeReceipt(receipt: MinionReceipt): MinionReceipt {
   mkdirSync(RECEIPTS_DIR, { recursive: true });
   writeFileSync(
     path.join(RECEIPTS_DIR, `${receipt.ticketId}.json`),

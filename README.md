@@ -109,12 +109,33 @@ a human. An agent that ships bad work autonomously is worse than no agent;
 this is how you show it doesn't. Full report:
 [`examples/minions/eval-report.json`](examples/minions/eval-report.json).
 
+### Real pull requests, not just a sandbox
+
+`forge pr <owner/repo> <issue>` runs the *same* minion and the *same* gates on
+a real cloned repository, and — only when the gates pass — pushes a branch and
+opens an actual pull request for human review. A minion read issue #1 on a demo
+repo and opened this, on its own:
+
+**→ [salehaiftikharr/forge-minions-demo#2](https://github.com/salehaiftikharr/forge-minions-demo/pull/2)** — a one-line, verified fix (3/3 tests passing, no regressions):
+
+```diff
+ export function slugify(input) {
+-  return String(input).trim().toLowerCase().replace(/ /g, "-");
++  return String(input).trim().toLowerCase().replace(/\s+/g, "-");
+ }
+```
+
+It never commits to the default branch and never merges — the pull request is
+the artifact, opened for a human to review.
+
 ```bash
 forge tickets                 # the sandbox's open tickets
 forge minion TICKET-001       # set one minion on one ticket
 forge minion all              # work every ticket once
 forge fleet                   # run continuously — pick up new/changed tickets as they appear
 forge fleet --once            # drain the current backlog and exit
+forge eval                    # measure the gate on a labeled set (0 unsafe ships)
+forge pr <owner/repo> <n>     # fix a real GitHub issue and open a real pull request
 ```
 
 ### Running continuously

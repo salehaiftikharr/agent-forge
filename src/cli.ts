@@ -25,6 +25,7 @@ import { refineAgent } from "./refine";
 import { runMinion, type Ticket, type MinionReceipt } from "./minion/minion";
 import { runFleet } from "./minion/fleet";
 import { evaluateMinions } from "./minion/evaluate";
+import { runMinionPR } from "./minion/github";
 import {
   saveSpec,
   loadSpec,
@@ -217,6 +218,32 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "pr": {
+      const [repo, issueArg] = rest;
+      const issueNumber = Number(issueArg);
+      if (!repo || !issueNumber) {
+        fail("Usage: forge pr <owner/repo> <issue-number>");
+      }
+      console.log(
+        `Minion on ${repo}#${issueNumber} with ${modelLabel(provider)}…\n`,
+      );
+      const receipt = await runMinionPR(repo, issueNumber, {
+        provider,
+        onProgress: (m) => console.log(`  ${m}`),
+      });
+      console.log("");
+      if (receipt.status === "shipped" && receipt.prUrl) {
+        console.log(`✓ opened a pull request: ${receipt.prUrl}`);
+        console.log(`  ${receipt.reason}`);
+      } else if (receipt.status === "shipped") {
+        console.log(`✓ shipped (no PR URL captured)`);
+      } else {
+        console.log(`⊘ ${receipt.status} — ${receipt.reason}`);
+        console.log("  No PR opened.");
+      }
+      break;
+    }
+
     case "eval": {
       console.log(
         `Verification eval with ${modelLabel(provider)} — does the gate ship the right work, and never the wrong work?\n`,
@@ -324,6 +351,7 @@ async function main(): Promise<void> {
           "  forge fleet [--once]          run minions continuously, picking up new tickets",
           "                                  (--interval <sec> sets the poll cadence)",
           "  forge eval                    measure the gate: ships the right work, never the wrong",
+          "  forge pr <owner/repo> <n>     fix a real GitHub issue and open a real pull request",
           "",
           "  --provider anthropic|openai   override the configured provider",
           "  --rounds <n>                  max repair rounds (default 3)",
