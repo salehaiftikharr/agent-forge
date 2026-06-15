@@ -1,0 +1,25 @@
+{
+  "name": "city-weather-fetcher",
+  "description": "Fetches the current weather for a given city using the free open-meteo API.",
+  "model": "openai/gpt-4.1",
+  "status": "passing",
+  "finalPassed": 3,
+  "finalTotal": 3,
+  "rounds": [
+    {
+      "round": 0,
+      "passed": 2,
+      "total": 3,
+      "failingInputs": [
+        "What's the current weather in Paris, France?"
+      ]
+    },
+    {
+      "round": 1,
+      "changeSummary": "Sharpened the system prompt to instruct the agent to explicitly state in its answer that weather data comes directly from the Open-Meteo API, ensuring responses are grounded as required.",
+      "passed": 3,
+      "total": 3,
+      "failingInputs": []
+    }
+  ]
+}

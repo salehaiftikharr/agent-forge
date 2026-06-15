@@ -89,7 +89,7 @@ export function loadSpec(name: string): AgentSpec {
 export function listSpecs(): AgentSpec[] {
   if (!existsSync(AGENTS_DIR)) return [];
   return readdirSync(AGENTS_DIR)
-    .filter((f) => f.endsWith(".json"))
+    .filter((f) => f.endsWith(".json") && !f.endsWith(".receipt.json"))
     .map((f) => {
       try {
         return agentSpecSchema.parse(
@@ -100,4 +100,48 @@ export function listSpecs(): AgentSpec[] {
       }
     })
     .filter((s): s is AgentSpec => s !== null);
+}
+
+// ---- Receipts: the build → test → repair record an agent ships with ----
+
+export interface ReceiptRound {
+  /** 0 = the initial build; 1.. = repair rounds. */
+  round: number;
+  /** What the repair changed this round (absent on round 0). */
+  changeSummary?: string;
+  passed: number;
+  total: number;
+  failingInputs: string[];
+}
+
+export interface Receipt {
+  name: string;
+  description: string;
+  model: string;
+  /** "passing" = every test cleared; "incomplete" = hit the round cap still failing. */
+  status: "passing" | "incomplete";
+  finalPassed: number;
+  finalTotal: number;
+  rounds: ReceiptRound[];
+}
+
+function receiptPath(name: string): string {
+  return path.join(AGENTS_DIR, `${name}.receipt.json`);
+}
+
+export function saveReceipt(receipt: Receipt): string {
+  mkdirSync(AGENTS_DIR, { recursive: true });
+  const file = receiptPath(receipt.name);
+  writeFileSync(file, JSON.stringify(receipt, null, 2) + "\n");
+  return file;
+}
+
+export function loadReceipt(name: string): Receipt {
+  const file = receiptPath(name);
+  if (!existsSync(file)) {
+    throw new Error(
+      `No receipt for "${name}". Run \`forge refine ${name}\` to produce one.`,
+    );
+  }
+  return JSON.parse(readFileSync(file, "utf8")) as Receipt;
 }

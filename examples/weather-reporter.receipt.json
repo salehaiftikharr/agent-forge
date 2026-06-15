@@ -1,0 +1,16 @@
+{
+  "name": "weather-reporter",
+  "description": "Reports the current weather for a given city using the free Open-Meteo API.",
+  "model": "anthropic/claude-opus-4-8",
+  "status": "passing",
+  "finalPassed": 4,
+  "finalTotal": 4,
+  "rounds": [
+    {
+      "round": 0,
+      "passed": 4,
+      "total": 4,
+      "failingInputs": []
+    }
+  ]
+}

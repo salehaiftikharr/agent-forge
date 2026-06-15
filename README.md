@@ -2,26 +2,43 @@
 
 **An agent that builds agents.** You describe an automation in plain English;
 Forge designs a working agent for it — system prompt, tools, *and its own
-acceptance tests* — saves it, and can run it or grade it on demand. It's a
-small compiler from a sentence to a runnable, self-verifying agent.
+acceptance tests* — then **tests it, and if it fails, fixes it and tests again**
+until it passes. What you get back is a runnable agent plus a *receipt*: proof
+of what it does reliably.
 
 ```
-$ forge build "Given a city, tell me its current weather using the open-meteo API"
-✓ Built "city-weather-fetcher"
-  tools: web_fetch, http_get_json
-  tests: 3
+$ forge build "Given a city, tell me its current weather using the open-meteo API" --repair
+✓ Built "weather-reporter"  (tools: http_get_json, current_datetime, calculator · tests: 4)
 
-$ forge test city-weather-fetcher
-✅ Show me the weather in Springfield.    → asks which Springfield before answering
-✅ Tell me the current weather in Atlantis. → refuses; not a real city
-❌ What's the current weather in Paris?   → got the weather, didn't cite the source the test demanded
-2/3 passed
+Proving it works (test → repair → test)…
+  testing the initial build…
+
+Receipt — "weather-reporter": ✓ passing (4/4) via anthropic/claude-opus-4-8
+  build      4/4
 ```
 
-The headline feature is the last step. Most "build an agent" tools stop at
-generating a prompt. Forge generates the prompt **and the bar that prompt has
-to clear**, then holds the agent to it — so every agent it produces comes with
-evidence of what it does and doesn't do reliably.
+The headline is that loop. Most "build an agent" tools stop at generating a
+prompt. Forge generates the prompt **and the bar that prompt must clear**, runs
+the agent against that bar, and — when it falls short — feeds the failures back
+to the builder, which revises the agent and re-tests. An agent improving an
+agent, with evals as the control signal. Every agent ships with the receipt
+showing how it got there.
+
+Claude (`claude-opus-4-8`) often clears the bar on the first build, like the
+4/4 above. The loop earns its keep when a build *doesn't* — and because the
+provider is a one-line seam, you can watch it work on either model. The same
+weather task built on GPT-4.1 missed one test (it fetched the weather but
+didn't cite the source the test demanded) and the repair round fixed exactly
+that:
+
+```
+Receipt — "city-weather-fetcher": ✓ passing (3/3) via openai/gpt-4.1
+  build      2/3
+  repair 1   3/3
+     ↳ Added a rule to state that weather data comes directly from the Open-Meteo API.
+```
+
+Both receipts are committed in [`examples/`](examples/).
 
 ## Why this shape
 
@@ -39,32 +56,39 @@ that makes a generated agent safe to run and honest about its limits:
   agent on each and asks a separate LLM judge whether the output cleared the
   bar. Grading is on behavior, not string-matching, because agent output is
   open-ended; the judge is told to fail plausible-but-wrong answers.
+- **Self-repair loop.** `forge refine` (or `build --repair`) tests the agent,
+  hands any failures back to the builder to revise the *prompt* — never to
+  weaken the tests, which are the contract — and re-tests, up to a round cap.
+  The receipt records each round and what the repair changed, so the path from
+  "2/3, didn't cite its source" to "3/3" is auditable, not magic.
 - **Auditable runs.** Every run prints the exact tool calls the agent made, so
   you can see *how* it reached an answer, not just the answer.
 - **One provider seam.** Build, run, and judge all go through a single
   `getModel()` (`--provider anthropic|openai`); defaults to `claude-opus-4-8`.
 
-That the example above scores **2/3, not 3/3, is the point**: the judge has
-teeth. The agent fetched Paris's weather correctly but didn't attribute it to
-the source the test required — a real gap, surfaced automatically. The
-ambiguity case ("which Springfield?") and the refusal case ("Atlantis isn't
-real") both passed on their own merits.
+That the GPT build lands at **2/3 before repairing is the point**: the judge
+has teeth. The agent fetched the weather correctly but didn't attribute it to
+the source the test required — a real gap, caught automatically, then fixed by
+the repair round. On Claude the same task passed 4/4 outright; either way, the
+receipt is the proof, not a promise.
 
 ## Architecture
 
 ```
-forge build "..."           forge run <name>            forge test <name>
-      │                           │                            │
-      ▼                           ▼                            ▼
-   builder.ts                 runtime.ts                   judge.ts
- generateObject →         generateText + the           runs each test case
- a validated AgentSpec    spec's granted tools,        through runtime.ts,
- (prompt+tools+tests)     in a step-capped loop        then an LLM judge
-      │                           │                     grades pass/fail
-      └──────────── spec.ts (zod schema + JSON storage) ─────────┘
-                              │
-                    tools/registry.ts
-              the fixed, safe capability set
+forge build "..."         forge refine <name>          forge run <name>
+      │                          │                            │
+      ▼                          ▼                            ▼
+   builder.ts            refine.ts (the loop)             runtime.ts
+ generateObject →     ┌─ test ─ fail? ─ repair.ts ─┐    generateText + the
+ a validated          │  (judge)     (revise spec)  │   spec's granted tools,
+ AgentSpec            └──── re-test ──── … ─────────┘   in a step-capped loop
+ (prompt+tools+tests)        │                          with a tool-call trace
+      │                 a Receipt:
+      │            round-by-round proof
+      └──────────── spec.ts (zod schema + JSON + receipts) ─────────┘
+                              │           │
+                    tools/registry.ts   judge.ts
+              the fixed, safe tool set   independent LLM grader
 ```
 
 - **`spec.ts`** — the `AgentSpec` zod schema and disk storage. The spec is the
@@ -73,6 +97,10 @@ forge build "..."           forge run <name>            forge test <name>
 - **`builder.ts`** — one `generateObject` call that designs the agent. The tool
   registry is in the builder's prompt; the output is type-checked against the
   schema and unknown tools are stripped.
+- **`refine.ts`** — the self-repair loop: test → repair → re-test until passing
+  or the round cap, emitting a `Receipt` of the whole run.
+- **`repair.ts`** — given an agent and its failing cases, a `generateObject`
+  call that returns a revised spec plus a one-line summary of what it changed.
 - **`runtime.ts`** — the actual agent loop (`generateText` + `stepCountIs`),
   returning the answer plus a trace of every tool call.
 - **`judge.ts`** — runs an agent's own tests and grades each with a separate
@@ -87,32 +115,42 @@ forge build "..."           forge run <name>            forge test <name>
 cp .env.example .env.local     # set LLM_PROVIDER and one provider's API key
 npm install
 
-npm run forge -- build "<what you want automated>"
-npm run forge -- list
-npm run forge -- test <name>
+npm run forge -- build "<what you want automated>"   # add --repair to auto-fix to passing
+npm run forge -- refine <name>        # test + repair a saved agent until it passes
+npm run forge -- test <name>          # just grade it, no repair
 npm run forge -- run <name> "<input>"
+npm run forge -- receipt <name>       # the build → test → repair record
+npm run forge -- list
 npm run forge -- show <name>          # the generated spec
 ```
 
 Add `--provider anthropic` or `--provider openai` to any command to override
 the configured provider — the same agent runs on either.
 
-A built example agent lives in [`examples/`](examples/city-weather-fetcher.json).
+A built example agent and its receipt live in
+[`examples/`](examples/city-weather-fetcher.receipt.json).
 
-## Known limitations & next steps
+## Roadmap
 
-Honest about what v1 doesn't do:
+Done:
 
-- **Fixed tool set.** Agents can only use the four built-in tools. The natural
-  next step is letting the builder *synthesize* a new tool (a small typed
-  function) when the task needs one it doesn't have — behind an approval gate.
-- **The judge is a single model.** A stricter version would use a panel of
-  independent judges and require a majority, the way a serious eval harness
-  treats a finding it's unsure about.
-- **No approval gate / write tools yet.** Everything is read-only by design.
-  Adding side-effecting tools (send email, write file) is the point where a
-  human-in-the-loop confirmation step becomes mandatory, not optional.
-- **Single-turn agents.** Built agents answer one input at a time; conversational
-  memory across turns is a later addition.
-- **No cost/latency tracking.** Token usage per build/run/test would make the
-  economics of a generated agent visible.
+- ✅ Build agents from plain English, with auto-generated acceptance tests.
+- ✅ Independent LLM-judge grading on behavior, not strings.
+- ✅ **Self-repair loop** — test → repair → re-test, with an audit receipt.
+
+Next, in order of leverage:
+
+- **Tool synthesis.** Today agents can only use the built-in tools. Let the
+  builder *write* a new typed tool when the task needs one — sandboxed, and
+  behind an approval gate before it ever runs. This is the real ceiling-remover.
+- **Judge panel.** Replace the single judge with a panel of independent judges
+  and a majority vote, the way a serious eval harness treats a finding it's
+  unsure about — so the receipts are trustworthy, not decorative.
+- **A live web surface.** Watch the build → test → repair loop stream in a
+  browser, with the receipt rendered at the end, plus a public gallery of built
+  agents.
+- **Write tools behind a human-in-the-loop gate.** Everything is read-only by
+  design today; side-effecting tools (send email, write file) require a
+  confirmation step, not optional.
+- **Cost/latency tracking** per build/run/repair, to make the economics of a
+  generated agent visible.
