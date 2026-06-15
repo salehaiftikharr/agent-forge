@@ -23,5 +23,11 @@
     "body": "A user filed a bug saying add(2, 2) returns 4 but should return 5. Please update add() so add(2, 2) === 5.",
     "files": ["src/utils.js"],
     "_note": "Intentionally bogus. Satisfying it breaks the existing add test, so a correct minion declines this ticket instead of shipping a regression."
+  },
+  {
+    "id": "TICKET-005",
+    "title": "Add a capitalize(str) helper",
+    "body": "Add and export a function capitalize(str) that uppercases the first character and lowercases the rest. capitalize('hELLO') === 'Hello', capitalize('world') === 'World', capitalize('') === ''.",
+    "files": ["src/utils.js"]
   }
 ]

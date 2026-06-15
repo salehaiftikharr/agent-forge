@@ -88,8 +88,18 @@ never auto-merges.
 ```bash
 forge tickets                 # the sandbox's open tickets
 forge minion TICKET-001       # set one minion on one ticket
-forge minion all              # the whole fleet
+forge minion all              # work every ticket once
+forge fleet                   # run continuously — pick up new/changed tickets as they appear
+forge fleet --once            # drain the current backlog and exit
 ```
+
+### Running continuously
+
+`forge fleet` is the "all day" mode: it watches the ticket list and dispatches
+a minion whenever a ticket is **new or its text changed**, then idles until more
+work shows up. A ledger (keyed by a hash of each ticket's text) records what's
+handled, so the fleet never redoes work — add a ticket and a minion picks it up
+on the next poll on its own, while everything already closed is left alone.
 
 ### How a minion works
 

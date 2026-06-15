@@ -23,6 +23,7 @@ import { runAgent } from "./runtime";
 import { testAgent } from "./judge";
 import { refineAgent } from "./refine";
 import { runMinion, type Ticket, type MinionReceipt } from "./minion/minion";
+import { runFleet } from "./minion/fleet";
 import {
   saveSpec,
   loadSpec,
@@ -56,21 +57,27 @@ interface ParsedArgs {
   provider?: string;
   repair: boolean;
   rounds?: number;
+  once: boolean;
+  interval?: number;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
   const positionals: string[] = [];
   let provider: string | undefined;
   let rounds: number | undefined;
+  let interval: number | undefined;
   let repair = false;
+  let once = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--provider") provider = argv[++i];
     else if (arg === "--repair") repair = true;
     else if (arg === "--rounds") rounds = Number(argv[++i]);
+    else if (arg === "--once") once = true;
+    else if (arg === "--interval") interval = Number(argv[++i]);
     else positionals.push(arg);
   }
-  return { positionals, provider, repair, rounds };
+  return { positionals, provider, repair, rounds, once, interval };
 }
 
 function fail(message: string): never {
@@ -91,7 +98,7 @@ function printReceipt(r: Receipt): void {
 }
 
 async function main(): Promise<void> {
-  const { positionals, provider, repair, rounds } = parseArgs(
+  const { positionals, provider, repair, rounds, once, interval } = parseArgs(
     process.argv.slice(2),
   );
   const [command, ...rest] = positionals;
@@ -199,6 +206,16 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "fleet": {
+      await runFleet({
+        provider,
+        once,
+        intervalMs: interval ? interval * 1000 : undefined,
+        onLog: (m) => console.log(m),
+      });
+      break;
+    }
+
     case "run": {
       const [name, ...inputParts] = rest;
       const input = inputParts.join(" ").trim();
@@ -275,6 +292,8 @@ async function main(): Promise<void> {
           "",
           "  forge tickets                 list the sandbox tickets",
           "  forge minion <TICKET-ID|all>  set a minion to close ticket(s) autonomously",
+          "  forge fleet [--once]          run minions continuously, picking up new tickets",
+          "                                  (--interval <sec> sets the poll cadence)",
           "",
           "  --provider anthropic|openai   override the configured provider",
           "  --rounds <n>                  max repair rounds (default 3)",

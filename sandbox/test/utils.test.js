@@ -44,3 +44,11 @@ test("parseQueryString: URL-decodes values and handles valueless keys", () => {
 test("add(2, 2) should equal 5 (TICKET-004 — intentionally impossible)", () => {
   assert.equal(utils.add(2, 2), 5);
 });
+
+// --- TICKET-005: add a capitalize(str) helper -----------------------------
+
+test("capitalize: uppercases the first letter, lowercases the rest", () => {
+  assert.equal(utils.capitalize("hELLO"), "Hello");
+  assert.equal(utils.capitalize("world"), "World");
+  assert.equal(utils.capitalize(""), "");
+});
