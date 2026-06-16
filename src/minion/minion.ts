@@ -192,12 +192,6 @@ export async function workTicket(
   const patch = workspace.stagedDiff();
   log(`final: ${finalTests.passed}/${finalTests.total} passing — verifying…`);
 
-  const regressions = Object.keys(baseline.tests).filter(
-    (name) => baseline.tests[name] && finalTests.tests[name] === false,
-  );
-  const newPasses = Object.keys(finalTests.tests).filter(
-    (name) => finalTests.tests[name] && baseline.tests[name] === false,
-  );
   const decided = (status: Decision["status"], reason: string): Decision => ({
     status,
     reason,
@@ -208,18 +202,42 @@ export async function workTicket(
     toolCalls,
   });
 
-  // Gate 1: no regressions, and real progress.
-  if (regressions.length > 0) {
-    return decided(
-      "declined",
-      `Would break previously-passing test(s): ${regressions.join("; ")}. Declined rather than ship a regression.`,
+  // Gate 1: no regressions, and real progress. When the runner gives a per-test
+  // map we reason test-by-test (so unrelated failing tests can stay failing).
+  // When it only gives an exit code, we require the whole suite to flip from
+  // failing to passing — and never the reverse.
+  if (baseline.perTest && finalTests.perTest) {
+    const regressions = Object.keys(baseline.tests).filter(
+      (name) => baseline.tests[name] && finalTests.tests[name] === false,
     );
-  }
-  if (newPasses.length === 0) {
-    return decided(
-      "declined",
-      "No previously-failing test was turned green — the change doesn't actually close the ticket.",
+    const newPasses = Object.keys(finalTests.tests).filter(
+      (name) => finalTests.tests[name] && baseline.tests[name] === false,
     );
+    if (regressions.length > 0) {
+      return decided(
+        "declined",
+        `Would break previously-passing test(s): ${regressions.join("; ")}. Declined rather than ship a regression.`,
+      );
+    }
+    if (newPasses.length === 0) {
+      return decided(
+        "declined",
+        "No previously-failing test was turned green — the change doesn't actually close the ticket.",
+      );
+    }
+  } else {
+    if (!finalTests.ok) {
+      return decided(
+        "declined",
+        "The test suite is still failing after the change — it does not resolve the ticket.",
+      );
+    }
+    if (baseline.ok) {
+      return decided(
+        "declined",
+        "The suite already passed before any change — there was no failing test to fix.",
+      );
+    }
   }
 
   // Gate 2: the change must be a legitimate, minimal fix, not gamed.

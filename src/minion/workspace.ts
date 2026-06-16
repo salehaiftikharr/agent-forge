@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { detectTestCommand, parseTestOutput } from "./test-runner";
 
 /**
  * A Workspace is the minion's sandbox boundary. Every run gets a fresh,
@@ -33,10 +34,26 @@ export interface TestResult {
   output: string;
   /** Per-test pass/fail by name, so the gate can reason about regressions. */
   tests: Record<string, boolean>;
+  /** True when we have a per-test map; false = the gate falls back to exit code. */
+  perTest: boolean;
 }
 
-const PROTECTED_DIRS = ["test", "tests"];
-const IGNORE = new Set(["node_modules", ".git", ".minion-runs"]);
+const PROTECTED_DIRS = ["test", "tests", "__tests__", "spec"];
+const IGNORE = new Set([
+  "node_modules",
+  ".git",
+  ".minion-runs",
+  "dist",
+  "build",
+  ".next",
+  "coverage",
+  "vendor",
+  "target",
+  "__pycache__",
+  ".venv",
+  "venv",
+  ".pytest_cache",
+]);
 
 function git(cwd: string, args: string[]): string {
   const res = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -56,10 +73,21 @@ export class Workspace {
     return abs;
   }
 
-  /** Is this repo-relative path inside a protected test directory? */
+  /**
+   * Is this a test file the minion must not edit? Covers test directories AND
+   * colocated test files across ecosystems (foo.test.ts, foo.spec.js,
+   * test_x.py, x_test.go), so the "minions can't edit the gate" rule holds no
+   * matter how a repo lays its tests out.
+   */
   isProtected(rel: string): boolean {
     const parts = path.normalize(rel).split(path.sep);
-    return parts.some((p) => PROTECTED_DIRS.includes(p));
+    if (parts.some((p) => PROTECTED_DIRS.includes(p))) return true;
+    const base = parts[parts.length - 1];
+    return (
+      /\.(test|spec)\.[cm]?[jt]sx?$/.test(base) || // JS/TS colocated
+      /(^test_.*|.*_test)\.py$/.test(base) || // pytest
+      /_test\.go$/.test(base) // go
+    );
   }
 
   read(rel: string): string {
@@ -97,34 +125,20 @@ export class Workspace {
    * per-test map so the caller can detect regressions by name.
    */
   runTests(): TestResult {
-    let files: string[] = [];
-    try {
-      files = readdirSync(path.join(this.root, "test"))
-        .filter((f) => f.endsWith(".test.js"))
-        .map((f) => path.join("test", f));
-    } catch {
-      // no test dir — leave files empty
-    }
-    // Force the TAP reporter: its `ok / not ok N - name` lines are stable and
-    // machine-readable, unlike the default reporter, which only prints summary
-    // counts when its output is piped.
-    const res = spawnSync("node", ["--test", "--test-reporter=tap", ...files], {
+    const cmd = detectTestCommand(this.root);
+    const res = spawnSync(cmd.argv[0], cmd.argv.slice(1), {
       cwd: this.root,
       encoding: "utf8",
-      timeout: 30_000,
+      timeout: 120_000,
     });
     const output = (res.stdout || "") + (res.stderr || "");
+    const parsed = parseTestOutput(cmd.format, output, res.status ?? 1);
+    return { ...parsed, output };
+  }
 
-    const tests: Record<string, boolean> = {};
-    for (const line of output.split("\n")) {
-      const m = line.match(/^(not ok|ok)\s+\d+\s+-\s+(.+?)\s*$/);
-      if (m) tests[m[2].replace(/\s+#.*$/, "").trim()] = m[1] === "ok";
-    }
-    const values = Object.values(tests);
-    const passed = values.filter(Boolean).length;
-    const failed = values.filter((v) => !v).length;
-    const total = passed + failed;
-    return { ok: total > 0 && failed === 0, passed, failed, total, output, tests };
+  /** A short description of how this repo's tests are run (for receipts/logs). */
+  testCommand(): string {
+    return detectTestCommand(this.root).how;
   }
 
   /** Stage everything and return the unified diff vs. the pristine baseline. */

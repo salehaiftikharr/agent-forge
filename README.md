@@ -183,18 +183,29 @@ on the next poll on its own, while everything already closed is left alone.
 ### How a minion works
 
 ```
-ticket → fresh sandbox copy (git branch) → agent loop:
+ticket → study the whole codebase (read-only) → write a plan
+       → branch off the base → implement on the branch:
             read code + tests · edit SOURCE only · run tests · iterate
-         → harness re-runs tests (ground truth)
-         → gate: a failing test went green AND nothing regressed?
-         → judge: is the diff a legitimate, minimal fix (not gamed)?
-         → SHIP (commit to branch) + receipt, or DECLINE + receipt
+       → harness re-runs the repo's OWN tests (ground truth)
+       → gate: a failing test went green AND nothing regressed?
+       → judge: is the diff a legitimate, minimal fix (not gamed)?
+       → SHIP (human commit + PR) + receipt, or DECLINE + receipt
 ```
+
+**Repo-agnostic by design.** A minion orients before it acts (it reads across
+the codebase and plans first), and it runs whatever test command the repo
+actually uses — `vitest`, `jest`, `mocha`, `go test`, `node:test`, or an npm
+`test` script are auto-detected, and `MINION_TEST_CMD` forces anything else.
+When the runner reports per-test results the gate reasons test-by-test (so
+unrelated failing tests stay out of scope); otherwise it requires the suite to
+go from failing to green. Pointing minions at a new project is configuration,
+not a code change.
 
 Built on Forge's engine — the model seam, the agent loop, and the
 judge are the same pieces `build`/`refine` use. New in `src/minion/`:
-`workspace.ts` (the sandbox boundary + test runner), `tools.ts` (the
-write-capable tools), `minion.ts` (the loop + gates).
+`workspace.ts` (the sandbox boundary), `test-runner.ts` (runner detection +
+result parsing), `tools.ts` (the write-capable tools), `minion.ts` (the loop +
+gates).
 
 ## Why this shape
 
