@@ -7,6 +7,7 @@ import {
   writeReceipt,
   testToReceipt,
   type MinionReceipt,
+  type Ticket,
 } from "./minion";
 import { modelLabel } from "../model";
 
@@ -49,40 +50,53 @@ function fetchIssue(repo: string, issueNumber: number): Issue {
   return JSON.parse(res.out) as Issue;
 }
 
-export async function runMinionPR(
+export interface PrOptions {
+  provider?: string;
+  /** Base branch to work from and target the PR at; defaults to the repo's default. */
+  baseBranch?: string;
+  /** A line for the top of the PR body, e.g. "Closes #3." or "Linear: ENG-123". */
+  reference?: string;
+  onProgress?: (m: string) => void;
+}
+
+/**
+ * The source-agnostic core: given a ticket (from GitHub, Linear, anywhere) and
+ * a repo, clone the repo on a fresh branch, run the minion + gates, and — only
+ * on approval — push and open a real pull request. The issue *source* is the
+ * caller's concern; everything from here down is identical no matter where the
+ * work came from.
+ */
+export async function openPullRequest(
   repo: string,
-  issueNumber: number,
-  opts: { provider?: string; onProgress?: (m: string) => void } = {},
+  ticket: Ticket,
+  opts: PrOptions = {},
 ): Promise<MinionReceipt> {
   const log = opts.onProgress ?? (() => {});
-
-  const issue = fetchIssue(repo, issueNumber);
-  log(`issue #${issue.number}: ${issue.title}`);
-
-  const ticketId = `issue-${issue.number}`;
-  const workDir = path.join(RUNS_DIR, `gh-${repo.replace(/[/]/g, "__")}-${issue.number}`);
+  const slug = ticket.id.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+  const workDir = path.join(RUNS_DIR, `gh-${repo.replace(/[/]/g, "__")}-${slug}`);
   if (existsSync(workDir)) rmSync(workDir, { recursive: true, force: true });
 
-  log("cloning repo…");
-  const clone = run("gh", ["repo", "clone", repo, workDir, "--", "--depth", "1"]);
+  log(opts.baseBranch ? `cloning ${repo} (branch ${opts.baseBranch})…` : `cloning ${repo}…`);
+  const cloneFlags = opts.baseBranch
+    ? ["--branch", opts.baseBranch, "--depth", "1"]
+    : ["--depth", "1"];
+  const clone = run("gh", ["repo", "clone", repo, workDir, "--", ...cloneFlags]);
   if (!clone.ok) throw new Error(`Clone failed: ${clone.err || clone.out}`);
 
+  // Whatever we checked out (the requested base, or the repo default) is what
+  // the new branch forks from and what the PR targets.
   const baseBranch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], workDir).out;
-  const branch = `minion/issue-${issue.number}`;
+  const branch = `minion/${slug}`;
   run("git", ["config", "user.email", "minion@agent-forge.local"], workDir);
   run("git", ["config", "user.name", "Forge Minion"], workDir);
   run("git", ["checkout", "-q", "-b", branch], workDir);
 
   const workspace = new Workspace(workDir);
-  const decision = await workTicket(
-    workspace,
-    { id: ticketId, title: issue.title, body: issue.body },
-    opts,
-  );
+  const decision = await workTicket(workspace, ticket, opts);
 
   const receiptBase: MinionReceipt = {
-    ticketId,
-    title: issue.title,
+    ticketId: ticket.id,
+    title: ticket.title,
     model: modelLabel(opts.provider),
     status: decision.status === "approved" ? "shipped" : decision.status,
     reason: decision.reason,
@@ -100,11 +114,12 @@ export async function runMinionPR(
 
   // Approved — ship it for real: commit, push the branch, open the PR.
   log("approved — pushing branch and opening PR…");
-  workspace.commit(`Fix #${issue.number}: ${issue.title}`);
+  workspace.commit(`${ticket.title}`);
   const push = run("git", ["push", "-u", "origin", branch], workDir);
   if (!push.ok) throw new Error(`Push failed: ${push.err || push.out}`);
 
-  const body = `Closes #${issue.number}.\n\n${decision.reason}\n\nVerified: ${decision.finalTests.passed}/${decision.finalTests.total} tests passing, no regressions.\n\n— opened autonomously by a [Forge minion](https://github.com/salehaiftikharr/agent-forge).`;
+  const refLine = opts.reference ? `${opts.reference}\n\n` : "";
+  const body = `${refLine}${decision.reason}\n\nVerified: ${decision.finalTests.passed}/${decision.finalTests.total} tests passing, no regressions.\n\n— opened autonomously by a [Forge minion](https://github.com/salehaiftikharr/agent-forge).`;
   const pr = run("gh", [
     "pr",
     "create",
@@ -115,7 +130,7 @@ export async function runMinionPR(
     "--head",
     branch,
     "--title",
-    issue.title,
+    ticket.title,
     "--body",
     body,
   ]);
@@ -123,4 +138,19 @@ export async function runMinionPR(
   const prUrl = pr.out.split("\n").find((l) => l.startsWith("http")) ?? pr.out;
 
   return writeReceipt({ ...receiptBase, prUrl });
+}
+
+/** GitHub-issue source: read the issue via `gh`, then open a PR for it. */
+export async function runMinionPR(
+  repo: string,
+  issueNumber: number,
+  opts: { provider?: string; baseBranch?: string; onProgress?: (m: string) => void } = {},
+): Promise<MinionReceipt> {
+  const issue = fetchIssue(repo, issueNumber);
+  opts.onProgress?.(`issue #${issue.number}: ${issue.title}`);
+  return openPullRequest(
+    repo,
+    { id: `issue-${issue.number}`, title: issue.title, body: issue.body },
+    { ...opts, reference: `Closes #${issue.number}.` },
+  );
 }

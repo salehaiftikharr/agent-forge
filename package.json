@@ -6,11 +6,14 @@
   "description": "An agent that builds agents: a plain-English description becomes a runnable, self-tested Claude agent.",
   "scripts": {
     "forge": "tsx src/cli.ts",
+    "slack": "tsx src/slack/bot.ts",
+    "test": "node --import tsx --test --test-reporter=tap \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",
     "@ai-sdk/openai": "^3.0.65",
+    "@slack/bolt": "^4.7.3",
     "ai": "^6.0.191",
     "zod": "^4.4.3"
   },

@@ -26,6 +26,7 @@ import { runMinion, type Ticket, type MinionReceipt } from "./minion/minion";
 import { runFleet } from "./minion/fleet";
 import { evaluateMinions } from "./minion/evaluate";
 import { runMinionPR } from "./minion/github";
+import { runMinionForLinear } from "./linear/dispatch";
 import {
   saveSpec,
   loadSpec,
@@ -61,6 +62,7 @@ interface ParsedArgs {
   rounds?: number;
   once: boolean;
   interval?: number;
+  base?: string;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -68,6 +70,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let provider: string | undefined;
   let rounds: number | undefined;
   let interval: number | undefined;
+  let base: string | undefined;
   let repair = false;
   let once = false;
   for (let i = 0; i < argv.length; i++) {
@@ -77,9 +80,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     else if (arg === "--rounds") rounds = Number(argv[++i]);
     else if (arg === "--once") once = true;
     else if (arg === "--interval") interval = Number(argv[++i]);
+    else if (arg === "--base") base = argv[++i];
     else positionals.push(arg);
   }
-  return { positionals, provider, repair, rounds, once, interval };
+  return { positionals, provider, repair, rounds, once, interval, base };
 }
 
 function fail(message: string): never {
@@ -100,9 +104,8 @@ function printReceipt(r: Receipt): void {
 }
 
 async function main(): Promise<void> {
-  const { positionals, provider, repair, rounds, once, interval } = parseArgs(
-    process.argv.slice(2),
-  );
+  const { positionals, provider, repair, rounds, once, interval, base } =
+    parseArgs(process.argv.slice(2));
   const [command, ...rest] = positionals;
 
   switch (command) {
@@ -229,6 +232,7 @@ async function main(): Promise<void> {
       );
       const receipt = await runMinionPR(repo, issueNumber, {
         provider,
+        baseBranch: base,
         onProgress: (m) => console.log(`  ${m}`),
       });
       console.log("");
@@ -240,6 +244,28 @@ async function main(): Promise<void> {
       } else {
         console.log(`⊘ ${receipt.status} — ${receipt.reason}`);
         console.log("  No PR opened.");
+      }
+      break;
+    }
+
+    case "linear": {
+      const [identifier, repoArg] = rest;
+      const repo = repoArg || process.env.MINION_DEFAULT_REPO;
+      if (!identifier || !repo) {
+        fail("Usage: forge linear <ENG-123> <owner/repo>  (repo optional if MINION_DEFAULT_REPO is set)");
+      }
+      console.log(`Minion on Linear ${identifier} → ${repo} with ${modelLabel(provider)}…\n`);
+      const receipt = await runMinionForLinear(repo as string, identifier, {
+        provider,
+        baseBranch: base,
+        onProgress: (m) => console.log(`  ${m}`),
+      });
+      console.log("");
+      if (receipt.status === "shipped" && receipt.prUrl) {
+        console.log(`✓ opened a pull request: ${receipt.prUrl}`);
+        console.log(`  ${receipt.reason}`);
+      } else {
+        console.log(`⊘ ${receipt.status} — ${receipt.reason}\n  No PR opened.`);
       }
       break;
     }
@@ -352,6 +378,7 @@ async function main(): Promise<void> {
           "                                  (--interval <sec> sets the poll cadence)",
           "  forge eval                    measure the gate: ships the right work, never the wrong",
           "  forge pr <owner/repo> <n>     fix a real GitHub issue and open a real pull request",
+          "  forge linear <ENG-123> <repo> fix a Linear issue and open a PR (comments back on Linear)",
           "",
           "  --provider anthropic|openai   override the configured provider",
           "  --rounds <n>                  max repair rounds (default 3)",

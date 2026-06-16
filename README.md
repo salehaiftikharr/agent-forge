@@ -138,6 +138,40 @@ forge eval                    # measure the gate on a labeled set (0 unsafe ship
 forge pr <owner/repo> <n>     # fix a real GitHub issue and open a real pull request
 ```
 
+### Talk to your minions in Slack
+
+The same minion has a front door: DM the bot (or `@mention` it) in plain
+English and it will either *browse* the work or *do* it. It runs in **Socket
+Mode** — no public URL, no deploy — on the laptop where `gh` is already
+authenticated.
+
+```
+you:    show me the open issues in ENG
+minion: Here's the open work in ENG (3):
+        1. ENG-10 🔴 Fix login button not responding on Safari  (Todo)
+        2. ENG-11 🟡 Add CSV export to the analytics dashboard  (Todo)
+        3. ENG-12 🟠 Crash when uploading large avatar images   (In Progress)
+
+you:    work on the login bug in salehaiftikharr/forge-minions-demo
+minion: 🫡 On it — ENG-10 (Fix login button…) → salehaiftikharr/forge-minions-demo.
+        • cloning… • reproducing… • fix verified (4/4 tests, no regressions)
+        ✅ ENG-10 → https://github.com/…/pull/7
+        (and comments the PR link back on the Linear issue)
+```
+
+It reads the Linear backlog (`listLinearIssues`), and **remembers the list it
+just showed you per thread**, so you can follow up with `do the second one`,
+`work on ENG-12`, or `work on all of them` (a minion per issue, in turn)
+without repeating yourself. Choosing *which* ticket to run is deliberately a
+pure, unit-tested function ([`src/linear/select.ts`](src/linear/select.ts)) —
+when a request is ambiguous it asks rather than guesses. A plain GitHub issue
+still works too: `fix issue 3 in owner/repo`.
+
+```bash
+npm run slack                 # start the Socket Mode bot (needs SLACK_* + LINEAR_API_KEY)
+npm test                      # unit-test the selection resolver
+```
+
 ### Running continuously
 
 `forge fleet` is the "all day" mode: it watches the ticket list and dispatches

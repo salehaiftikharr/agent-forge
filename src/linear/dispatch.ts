@@ -1,0 +1,38 @@
+import { openPullRequest } from "../minion/github";
+import { fetchLinearIssue, addLinearComment } from "./client";
+import type { MinionReceipt } from "../minion/minion";
+
+/**
+ * Linear-issue source: read the issue from Linear, run the same minion + open a
+ * GitHub PR, then comment the PR link back on the Linear issue so the board
+ * stays in sync. The minion itself is unchanged — Linear just feeds it the work
+ * and gets the result.
+ */
+export async function runMinionForLinear(
+  repo: string,
+  identifier: string,
+  opts: { provider?: string; baseBranch?: string; onProgress?: (m: string) => void } = {},
+): Promise<MinionReceipt> {
+  const log = opts.onProgress ?? (() => {});
+  const issue = await fetchLinearIssue(identifier);
+  log(`Linear ${issue.identifier}: ${issue.title}`);
+
+  const receipt = await openPullRequest(
+    repo,
+    { id: issue.identifier, title: issue.title, body: issue.description || issue.title },
+    { ...opts, reference: `Linear: ${issue.identifier} — ${issue.url}` },
+  );
+
+  if (receipt.status === "shipped" && receipt.prUrl) {
+    try {
+      await addLinearComment(
+        issue.id,
+        `🤖 A Forge minion opened a pull request for this issue: ${receipt.prUrl}`,
+      );
+      log("commented the PR link back on Linear.");
+    } catch (error) {
+      log(`(couldn't comment back on Linear: ${error instanceof Error ? error.message : error})`);
+    }
+  }
+  return receipt;
+}
