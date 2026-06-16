@@ -86,7 +86,17 @@ export async function openPullRequest(
   // Whatever we checked out (the requested base, or the repo default) is what
   // the new branch forks from and what the PR targets.
   const baseBranch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], workDir).out;
-  const branch = `minion/${slug}`;
+
+  // Pick a branch name not already on the remote, so re-running a ticket opens
+  // a fresh PR instead of colliding with a previous run's branch.
+  let branch = `minion/${slug}`;
+  for (
+    let n = 2;
+    run("git", ["ls-remote", "--exit-code", "--heads", "origin", branch], workDir).ok;
+    n++
+  ) {
+    branch = `minion/${slug}-${n}`;
+  }
 
   // Commit as a human, using the host's own git identity — no bot signature.
   const authorName = run("git", ["config", "--global", "user.name"]).out || "Developer";
