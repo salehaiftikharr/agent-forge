@@ -71,10 +71,13 @@ How to work:
 When you're done, end with a one-sentence summary of what you changed (or why you are declining).`;
 }
 
-/** First non-empty line of the plan, trimmed for a tidy progress log. */
+/** First substantive line of the plan (skipping markdown headings), for a tidy log. */
 function firstLine(text: string): string {
-  const line = text.split("\n").find((l) => l.trim()) ?? "";
-  return line.length > 120 ? line.slice(0, 117) + "…" : line;
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/^[#>*\-\s]+/, "").trim();
+    if (line.length >= 12) return line.length > 120 ? line.slice(0, 117) + "…" : line;
+  }
+  return "ready to implement";
 }
 
 const verdictSchema = z.object({
