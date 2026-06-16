@@ -87,12 +87,20 @@ export async function openPullRequest(
   // the new branch forks from and what the PR targets.
   const baseBranch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], workDir).out;
   const branch = `minion/${slug}`;
-  run("git", ["config", "user.email", "minion@agent-forge.local"], workDir);
-  run("git", ["config", "user.name", "Forge Minion"], workDir);
-  run("git", ["checkout", "-q", "-b", branch], workDir);
+
+  // Commit as a human, using the host's own git identity — no bot signature.
+  const authorName = run("git", ["config", "--global", "user.name"]).out || "Developer";
+  const authorEmail = run("git", ["config", "--global", "user.email"]).out || "dev@localhost";
+  run("git", ["config", "user.name", authorName], workDir);
+  run("git", ["config", "user.email", authorEmail], workDir);
 
   const workspace = new Workspace(workDir);
-  const decision = await workTicket(workspace, ticket, opts);
+  // The minion studies the repo and writes a plan first; only then do we branch
+  // off the base and let it implement on the new branch.
+  const decision = await workTicket(workspace, ticket, {
+    ...opts,
+    onPlanReady: () => run("git", ["checkout", "-q", "-b", branch], workDir),
+  });
 
   const receiptBase: MinionReceipt = {
     ticketId: ticket.id,
@@ -114,12 +122,12 @@ export async function openPullRequest(
 
   // Approved — ship it for real: commit, push the branch, open the PR.
   log("approved — pushing branch and opening PR…");
-  workspace.commit(`${ticket.title}`);
+  workspace.commit(ticket.title); // a plain, human one-liner; no trailers or credits
   const push = run("git", ["push", "-u", "origin", branch], workDir);
   if (!push.ok) throw new Error(`Push failed: ${push.err || push.out}`);
 
-  const refLine = opts.reference ? `${opts.reference}\n\n` : "";
-  const body = `${refLine}${decision.reason}\n\nVerified: ${decision.finalTests.passed}/${decision.finalTests.total} tests passing, no regressions.\n\n— opened autonomously by a [Forge minion](https://github.com/salehaiftikharr/agent-forge).`;
+  // A clean, human PR body: the reference (if any) and a short summary. No footer.
+  const body = [opts.reference, decision.reason].filter(Boolean).join("\n\n");
   const pr = run("gh", [
     "pr",
     "create",

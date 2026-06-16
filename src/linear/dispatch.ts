@@ -20,14 +20,14 @@ export async function runMinionForLinear(
   const receipt = await openPullRequest(
     repo,
     { id: issue.identifier, title: issue.title, body: issue.description || issue.title },
-    { ...opts, reference: `Linear: ${issue.identifier} — ${issue.url}` },
+    { ...opts, reference: `Resolves ${issue.identifier}.` },
   );
 
   if (receipt.status === "shipped" && receipt.prUrl) {
     try {
       await addLinearComment(
         issue.id,
-        `🤖 A Forge minion opened a pull request for this issue: ${receipt.prUrl}`,
+        `Opened a pull request for this: ${receipt.prUrl}`,
       );
       log("commented the PR link back on Linear.");
     } catch (error) {

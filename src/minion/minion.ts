@@ -4,7 +4,7 @@ import path from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { getModel, modelLabel } from "../model";
 import { prepareWorkspace, type TestResult, type Workspace } from "./workspace";
-import { minionTools } from "./tools";
+import { minionTools, minionReadTools } from "./tools";
 
 /**
  * A minion: an autonomous agent that takes one ticket and tries to close it on
@@ -46,16 +46,35 @@ const SANDBOX_DIR = path.join(process.cwd(), "sandbox");
 const RUNS_DIR = path.join(process.cwd(), ".minion-runs");
 const RECEIPTS_DIR = path.join(process.cwd(), "minion-receipts");
 
-function systemPrompt(): string {
-  return `You are a "minion": an autonomous coding agent that resolves ONE ticket on a small repository, using the provided tools.
+function planSystemPrompt(): string {
+  return `You are a careful engineer about to pick up ONE ticket on a repository you have not seen before. Before writing any code, get yourself fully up to speed.
+
+How to plan:
+- Use list_files and read_file to study the codebase: its layout, the existing source, and the conventions it follows (style, naming, how things are structured).
+- Then read the ticket carefully and work out exactly what it is asking for.
+- Decide the MINIMAL change that resolves it: which file(s) to touch and the specific edit to make, matching the codebase's existing conventions.
+- Stay strictly within this one ticket. The repo may contain other failing tests for unrelated, not-yet-built features — those are OTHER tickets and out of scope. Do not plan to touch them.
+
+This is planning only — do NOT write code yet. Output a short, concrete plan in plain prose: what you understand the codebase to be, and the exact change you will make for this ticket.`;
+}
+
+function implementSystemPrompt(): string {
+  return `You are a "minion": an autonomous coding agent resolving ONE ticket on a repository, using the provided tools. You have already studied the codebase and written the plan below — now carry it out.
 
 How to work:
-- Start by reading the relevant source AND the test file, so you know the exact expected behavior. The tests are your acceptance criteria.
-- Make the MINIMAL source change that resolves the ticket. Don't refactor, reformat, or touch unrelated code.
-- Run the tests with run_tests and iterate until they pass. A fix is only acceptable when EVERY test passes — the ticket's new test AND all pre-existing ones. Never regress passing behavior.
-- You cannot edit test files; they are the gate. If the only way to make a test pass would be to break another test or change existing correct behavior, the ticket is faulty — do NOT force it. Stop and explain clearly that you are declining and why.
+- Read the test(s) that cover your ticket so you match the exact expected behavior; the tests are your acceptance criteria.
+- Make the MINIMAL source change your plan calls for. Do not refactor, reformat, or touch unrelated code.
+- The repo may contain other failing tests for features that are NOT your ticket. Those belong to other tickets and are out of scope — leave them failing, do not implement them.
+- Run the tests with run_tests and iterate until the test(s) for your ticket pass and nothing that was passing before has broken.
+- You cannot edit test files; they are the gate. If your ticket could only pass by breaking another passing test or changing correct existing behavior, do NOT force it — stop and explain that you are declining and why.
 
-When you're done, end with a one-paragraph summary: what you changed and why, or — if you couldn't satisfy every test without breaking something — that you are declining the ticket, and the specific conflict that makes it impossible.`;
+When you're done, end with a one-sentence summary of what you changed (or why you are declining).`;
+}
+
+/** First non-empty line of the plan, trimmed for a tidy progress log. */
+function firstLine(text: string): string {
+  const line = text.split("\n").find((l) => l.trim()) ?? "";
+  return line.length > 120 ? line.slice(0, 117) + "…" : line;
 }
 
 const verdictSchema = z.object({
@@ -109,7 +128,13 @@ export interface Decision {
 export async function workTicket(
   workspace: Workspace,
   ticket: Ticket,
-  opts: { provider?: string; maxSteps?: number; onProgress?: (m: string) => void } = {},
+  opts: {
+    provider?: string;
+    maxSteps?: number;
+    onProgress?: (m: string) => void;
+    /** Called once after the minion has studied the repo and made a plan, before it implements — the caller uses this to branch off main. */
+    onPlanReady?: () => void;
+  } = {},
 ): Promise<Decision> {
   const log = opts.onProgress ?? (() => {});
   const baseline = workspace.runTests();
@@ -118,16 +143,35 @@ export async function workTicket(
   let steps = 0;
   let toolCalls = 0;
   try {
-    log("minion working…");
+    // Phase 1 — orient and plan: read the whole codebase and understand it,
+    // read the ticket, and decide the change BEFORE writing anything.
+    log("studying the codebase…");
+    const planResult = await generateText({
+      model: getModel(opts.provider),
+      system: planSystemPrompt(),
+      prompt: `Ticket:\n\n[${ticket.id}] ${ticket.title}\n${ticket.body}\n\nStudy the repository, then write your plan.`,
+      tools: minionReadTools(workspace),
+      stopWhen: stepCountIs(8),
+    });
+    const plan = planResult.text.trim();
+    steps += planResult.steps.length;
+    toolCalls += planResult.steps.flatMap((s) => s.toolCalls ?? []).length;
+    log(`plan ready — ${firstLine(plan)}`);
+
+    // Only now, with the codebase understood and a plan in hand, branch off main.
+    opts.onPlanReady?.();
+
+    // Phase 2 — implement the plan.
+    log("implementing…");
     const result = await generateText({
       model: getModel(opts.provider),
-      system: systemPrompt(),
-      prompt: `Resolve this ticket:\n\n[${ticket.id}] ${ticket.title}\n${ticket.body}`,
+      system: implementSystemPrompt(),
+      prompt: `Ticket:\n\n[${ticket.id}] ${ticket.title}\n${ticket.body}\n\nYour plan:\n${plan}\n\nImplement it now.`,
       tools: minionTools(workspace),
       stopWhen: stepCountIs(opts.maxSteps ?? 14),
     });
-    steps = result.steps.length;
-    toolCalls = result.steps.flatMap((s) => s.toolCalls ?? []).length;
+    steps += result.steps.length;
+    toolCalls += result.steps.flatMap((s) => s.toolCalls ?? []).length;
   } catch (error) {
     return {
       status: "error",

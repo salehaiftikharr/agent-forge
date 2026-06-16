@@ -8,7 +8,12 @@ import type { Workspace } from "./workspace";
  * `write_file` tool surfaces the "no editing tests" rule back to the model as a
  * tool error it can read and adapt to, rather than silently failing.
  */
-export function minionTools(ws: Workspace): Record<string, Tool> {
+/**
+ * Read-only tools for the orientation phase: a minion uses these to study the
+ * whole codebase and understand it before it writes a single line. No writing,
+ * no test runs — just looking.
+ */
+export function minionReadTools(ws: Workspace): Record<string, Tool> {
   return {
     list_files: tool({
       description:
@@ -19,7 +24,7 @@ export function minionTools(ws: Workspace): Record<string, Tool> {
 
     read_file: tool({
       description:
-        "Read a file's full contents. Read the relevant source AND the failing test so you know the exact expected behavior.",
+        "Read a file's full contents. Read widely to understand the codebase, its structure, and its conventions.",
       inputSchema: z.object({
         path: z.string().describe("Repo-relative path, e.g. src/utils.js"),
       }),
@@ -31,6 +36,12 @@ export function minionTools(ws: Workspace): Record<string, Tool> {
         }
       },
     }),
+  };
+}
+
+export function minionTools(ws: Workspace): Record<string, Tool> {
+  return {
+    ...minionReadTools(ws),
 
     write_file: tool({
       description:
