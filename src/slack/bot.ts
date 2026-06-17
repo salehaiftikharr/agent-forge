@@ -19,8 +19,9 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { loadEnv } from "../env";
 import { getModel } from "../model";
-import { runMinionPR } from "../minion/github";
-import { runMinionForLinear } from "../linear/dispatch";
+import { runMinionPR, fetchIssue } from "../minion/github";
+import { openSpecPR } from "../minion/spec";
+import { runMinionForLinear, runSpecForLinear } from "../linear/dispatch";
 import {
   listLinearIssues,
   type LinearIssueSummary,
@@ -44,14 +45,18 @@ const HELP = [
   "• `work on all of them` — a minion per issue, one after another",
   "• `fix issue 3 in owner/repo` — a plain GitHub issue",
   "• add `on the develop branch` to target a branch",
+  "",
+  "*Just reproduce it (no fix):*",
+  "• `write a failing test for ENG-12` — a spec-author opens a repro test for review",
+  "• `reproduce the login bug` — pick from a list, same idea",
   DEFAULT_REPO ? `\n_Default repo: ${DEFAULT_REPO}_` : "",
 ].join("\n");
 
 const commandSchema = z.object({
   intent: z
-    .enum(["list", "run", "run_all", "help", "unknown"])
+    .enum(["list", "run", "run_all", "spec", "help", "unknown"])
     .describe(
-      "list = show the Linear issues; run = put a minion on ONE issue; run_all = a minion on EVERY listed issue; help = explain yourself.",
+      "list = show the Linear issues; run = put a minion on ONE issue; run_all = a minion on EVERY listed issue; spec = write ONLY a failing reproduction test for an issue (no fix), e.g. 'write a test for', 'reproduce', 'add a failing test'; help = explain yourself.",
     ),
   repo: z.string().nullable().describe("GitHub repo as owner/name, or null if not mentioned."),
   team: z
@@ -87,7 +92,7 @@ async function parseCommand(text: string): Promise<Command> {
     schema: commandSchema,
     system:
       "You parse a message to an autonomous coding-agent bot that works from Linear and GitHub issues. " +
-      "Decide whether the user wants to LIST issues, RUN a minion on one issue, RUN_ALL on every listed issue, or get HELP. " +
+      "Decide whether the user wants to LIST issues, RUN a minion on one issue, RUN_ALL on every listed issue, SPEC (write only a failing reproduction test, no fix), or get HELP. " +
       "Extract the repo (owner/name), a Linear team key (the letters in ids like ENG-12), a topic to filter by, " +
       "and — when running — how they referred to the issue (identifier, position, or description) as `selection`. " +
       "If they just greet you or ask what you do, intent is 'help'.",
@@ -164,6 +169,18 @@ async function dispatchOne(
   return "error";
 }
 
+/** Spec-author path: write a failing reproduction test for a Linear issue, open it for review. */
+async function dispatchSpec(repo: string, identifier: string, say: Say): Promise<void> {
+  const receipt = await runSpecForLinear(repo, identifier, {
+    onProgress: (m) => void say(`   • ${m}`),
+  });
+  if (receipt.status === "authored" && receipt.prUrl) {
+    await say(`🧪 \`${identifier}\` → failing test opened for review: ${receipt.prUrl}\n> ${receipt.reason}`);
+  } else {
+    await say(`⊘ \`${identifier}\` — ${receipt.reason}`);
+  }
+}
+
 async function runAll(
   repo: string,
   issues: LinearIssueSummary[],
@@ -238,9 +255,32 @@ async function handle(rawText: string, say: Say, threadKey: string): Promise<voi
   }
 
   // A plain GitHub issue number short-circuits the Linear flow.
-  if (command.intent === "run" && command.issueNumber != null && !command.selection) {
+  if (
+    (command.intent === "run" || command.intent === "spec") &&
+    command.issueNumber != null &&
+    !command.selection
+  ) {
     if (!repo) {
       await say("Which repo holds the code? Give it as `owner/name`.");
+      return;
+    }
+    if (command.intent === "spec") {
+      await say(`🧪 Writing a failing test for issue #${command.issueNumber} → \`${repo}\` (no fix).`);
+      try {
+        const issue = fetchIssue(repo, command.issueNumber);
+        const receipt = await openSpecPR(
+          repo,
+          { id: `issue-${command.issueNumber}`, title: issue.title, body: issue.body },
+          { reference: `Reproduces #${command.issueNumber}.`, onProgress: (m) => void say(`• ${m}`) },
+        );
+        if (receipt.status === "authored" && receipt.prUrl) {
+          await say(`🧪 Opened a reproduction-test PR for review: ${receipt.prUrl}\n> ${receipt.reason}`);
+        } else {
+          await say(`⊘ ${receipt.reason}`);
+        }
+      } catch (error) {
+        await say(`✗ Failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
       return;
     }
     await say(`🫡 On it — issue #${command.issueNumber} → \`${repo}\`.`);
@@ -269,9 +309,14 @@ async function handle(rawText: string, say: Say, threadKey: string): Promise<voi
 
   // An explicitly named Linear id runs directly.
   if (command.linearId && command.intent !== "run_all") {
-    await say(`🫡 On it — \`${command.linearId}\` → \`${repo}\`.`);
     try {
-      await dispatchOne(repo, command.linearId, command.branch, say);
+      if (command.intent === "spec") {
+        await say(`🧪 Writing a failing test for \`${command.linearId}\` → \`${repo}\` (no fix).`);
+        await dispatchSpec(repo, command.linearId, say);
+      } else {
+        await say(`🫡 On it — \`${command.linearId}\` → \`${repo}\`.`);
+        await dispatchOne(repo, command.linearId, command.branch, say);
+      }
     } catch (error) {
       await say(`✗ Failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -291,7 +336,10 @@ async function handle(rawText: string, say: Say, threadKey: string): Promise<voi
     return;
   }
 
-  if (command.intent === "run_all" || /\ball\b/i.test(command.selection ?? "")) {
+  if (
+    command.intent === "run_all" ||
+    (command.intent !== "spec" && /\ball\b/i.test(command.selection ?? ""))
+  ) {
     await runAll(repo, issues, command.branch, say);
     return;
   }
@@ -304,7 +352,23 @@ async function handle(rawText: string, say: Say, threadKey: string): Promise<voi
     return;
   }
   if (selection.kind === "all") {
+    if (command.intent === "spec") {
+      await say("I write one reproduction at a time — name a single issue, e.g. `write a test for the first one`.");
+      return;
+    }
     await runAll(repo, selection.issues, command.branch, say);
+    return;
+  }
+
+  if (command.intent === "spec") {
+    await say(
+      `🧪 Writing a failing test for \`${selection.issue.identifier}\` (${selection.issue.title}) → \`${repo}\` (no fix).`,
+    );
+    try {
+      await dispatchSpec(repo, selection.issue.identifier, say);
+    } catch (error) {
+      await say(`✗ Failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return;
   }
 
