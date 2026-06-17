@@ -16,3 +16,5 @@ node_modules
 /minion-evals/
 # per-repo profiles are a local cache the minion rebuilds
 /.minion-profiles/
+# the outcome corpus is regenerated from receipts
+/minion-corpus.json

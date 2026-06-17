@@ -25,6 +25,7 @@ import { refineAgent } from "./refine";
 import { runMinion, type Ticket, type MinionReceipt } from "./minion/minion";
 import { runFleet } from "./minion/fleet";
 import { evaluateMinions } from "./minion/evaluate";
+import { runCorpus } from "./minion/corpus";
 import { runMinionPR, fetchIssue } from "./minion/github";
 import { openSpecPR } from "./minion/spec";
 import { runMinionForLinear } from "./linear/dispatch";
@@ -323,6 +324,30 @@ async function main(): Promise<void> {
         `Unsafe ships (shipped work that should have been declined): ${report.unsafeShips}`,
       );
       process.exitCode = report.unsafeShips > 0 ? 1 : 0;
+      break;
+    }
+
+    case "corpus": {
+      console.log("Outcome corpus — what humans did with the minions' PRs:\n");
+      const { cases, summary } = runCorpus({ onLog: (m) => console.log(`  ${m}`) });
+      console.log("");
+      for (const c of cases) {
+        const mark = c.label === "bad" ? "✗" : c.label === "good" ? "✓" : "·";
+        console.log(`  ${mark} ${c.ticketId} — ${c.minionStatus}/${c.humanOutcome}: ${c.note}`);
+      }
+      console.log(
+        `\n  ${summary.accepted} merged · ${summary.rejected} rejected · ${summary.pending} pending · ${summary.declined} declined (of ${summary.total})`,
+      );
+      if (summary.rejected > 0) {
+        console.log(
+          `\n⚠ ${summary.rejected} shipped PR(s) were rejected by a human — counterexamples to fold into the eval set.`,
+        );
+      } else {
+        console.log(
+          "\n✓ No human-rejected ships on record — the zero-unsafe-ships record holds against real outcomes.",
+        );
+      }
+      console.log("  Written to minion-corpus.json.");
       break;
     }
 
