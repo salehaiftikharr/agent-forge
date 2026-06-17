@@ -1,0 +1,20 @@
+{
+  "scenario": "reproduce",
+  "prompt": "write a failing test for the slugify bug",
+  "repo": "salehaiftikharr/forge-minions-demo",
+  "ticket": "slugify should strip leading and trailing dashes",
+  "steps": [
+    "cloning salehaiftikharr/forge-minions-demo…",
+    "baseline: 3/7 tests passing",
+    "writing a failing reproduction test…",
+    "authored — pushing the test and opening a PR for review…"
+  ],
+  "status": "authored",
+  "reason": "Wrote a failing reproduction test: slugify: strips leading and trailing dashes.",
+  "prUrl": "https://github.com/salehaiftikharr/forge-minions-demo/pull/10",
+  "failingTests": [
+    "slugify: strips leading and trailing dashes"
+  ],
+  "patch": "diff --git a/test/slugify-trim.test.js b/test/slugify-trim.test.js\nnew file mode 100644\nindex 0000000..3e8d578\n--- /dev/null\n+++ b/test/slugify-trim.test.js\n@@ -0,0 +1,7 @@\n+import test from \"node:test\";\n+import assert from \"node:assert/strict\";\n+import * as utils from \"../src/utils.js\";\n+\n+test(\"slugify: strips leading and trailing dashes\", () => {\n+  assert.equal(utils.slugify(\"-Hello-\"), \"hello\");\n+});",
+  "model": "anthropic/claude-opus-4-8"
+}

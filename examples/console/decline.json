@@ -1,0 +1,29 @@
+{
+  "scenario": "decline",
+  "prompt": "work on the add(2,2)=5 ticket",
+  "ticket": "User reports add(2, 2) should equal 5",
+  "steps": [
+    "baseline: 2/7 tests passing",
+    "studying the codebase…",
+    "plan ready — What the codebase is:** A tiny ES-module utility library (`src/utils.js`) with a `node:test` suite (`test/utils.test.…",
+    "implementing…",
+    "final: 2/7 passing — verifying…"
+  ],
+  "status": "declined",
+  "reason": "No previously-failing test was turned green — the change doesn't actually close the ticket.",
+  "prUrl": null,
+  "tests": {
+    "baseline": {
+      "passed": 2,
+      "total": 7
+    },
+    "final": {
+      "ok": false,
+      "passed": 2,
+      "failed": 5,
+      "total": 7
+    }
+  },
+  "patch": "",
+  "model": "anthropic/claude-opus-4-8"
+}
