@@ -109,6 +109,7 @@ export async function openPullRequest(
   // off the base and let it implement on the new branch.
   const decision = await workTicket(workspace, ticket, {
     ...opts,
+    repoKey: repo,
     onPlanReady: () => run("git", ["checkout", "-q", "-b", branch], workDir),
   });
 

@@ -14,3 +14,5 @@ node_modules
 # minion receipts are artifacts; committed examples live in examples/
 /minion-receipts/
 /minion-evals/
+# per-repo profiles are a local cache the minion rebuilds
+/.minion-profiles/

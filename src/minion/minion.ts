@@ -6,6 +6,8 @@ import { getModel, modelLabel } from "../model";
 import { prepareWorkspace, type TestResult, type Workspace } from "./workspace";
 import { minionTools, minionReadTools } from "./tools";
 import { generateMutants } from "./mutate";
+import { extractFileHints, resolveHints, buildScopeNote } from "./scope";
+import { loadProfile, saveProfile, mergeProfile } from "./profile";
 
 /**
  * A minion: an autonomous agent that takes one ticket and tries to close it on
@@ -188,22 +190,40 @@ export async function workTicket(
     onProgress?: (m: string) => void;
     /** Called once after the minion has studied the repo and made a plan, before it implements — the caller uses this to branch off main. */
     onPlanReady?: () => void;
+    /** A stable key (e.g. the repo) for the per-repo profile that seeds and learns across runs. */
+    repoKey?: string;
   } = {},
 ): Promise<Decision> {
   const log = opts.onProgress ?? (() => {});
   const baseline = workspace.runTests();
   log(`baseline: ${baseline.passed}/${baseline.total} tests passing`);
 
+  // Orient: seed the study step from the ticket's own file hints and what we
+  // learned on past visits, so it goes straight to the relevant files instead
+  // of reading the whole tree. Hoisted so we can fold this run back into the
+  // profile afterward.
+  const repoFiles = workspace.listFiles();
+  const profile = opts.repoKey ? loadProfile(opts.repoKey) : null;
+  const hints = resolveHints(
+    extractFileHints(`${ticket.title}\n${ticket.body}`),
+    repoFiles,
+  );
+  const scopeNote = buildScopeNote(hints, profile?.hotFiles ?? [], workspace.testCommand());
+
   let steps = 0;
   let toolCalls = 0;
   try {
-    // Phase 1 — orient and plan: read the whole codebase and understand it,
-    // read the ticket, and decide the change BEFORE writing anything.
+    // Phase 1 — orient and plan: understand the code and decide the change
+    // BEFORE writing anything.
+    if (hints.length) log(`scope hints: ${hints.join(", ")}`);
     log("studying the codebase…");
     const planResult = await generateText({
       model: getModel(opts.provider),
       system: planSystemPrompt(),
-      prompt: `Ticket:\n\n[${ticket.id}] ${ticket.title}\n${ticket.body}\n\nStudy the repository, then write your plan.`,
+      prompt: `Ticket:\n\n[${ticket.id}] ${ticket.title}\n${ticket.body}\n\n${scopeNote}\n\nStudy the repository, then write your plan.`.replace(
+        /\n{3,}/g,
+        "\n\n",
+      ),
       tools: minionReadTools(workspace),
       stopWhen: stepCountIs(8),
     });
@@ -242,6 +262,19 @@ export async function workTicket(
   const finalTests = workspace.runTests();
   const patch = workspace.stagedDiff();
   log(`final: ${finalTests.passed}/${finalTests.total} passing — verifying…`);
+
+  // Learn for next time: remember the test command, file tree, and the files
+  // this run gravitated to, so the next visit to this repo orients faster.
+  if (opts.repoKey) {
+    const touched = [...hints, ...Object.keys(workspace.changedSourceLines())];
+    saveProfile(
+      mergeProfile(opts.repoKey, profile, {
+        testCommand: workspace.testCommand(),
+        files: repoFiles,
+        touched,
+      }),
+    );
+  }
 
   const decided = (status: Decision["status"], reason: string): Decision => ({
     status,

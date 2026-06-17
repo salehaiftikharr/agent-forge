@@ -226,12 +226,21 @@ unrelated failing tests stay out of scope); otherwise it requires the suite to
 go from failing to green. Pointing minions at a new project is configuration,
 not a code change.
 
+**Gets sharper on repeat visits.** Before studying the code, a minion seeds its
+orientation from the ticket's own file hints (stack traces, `path:line`,
+backticked paths — resolved against the real tree) and from a persistent
+per-repo profile of where past fixes landed and how the repo runs its tests. So
+instead of reading the whole tree blindly every run, it heads straight for the
+files that matter — cheaper and sharper the more it works a repo. The profile
+is a local cache (`.minion-profiles/`) it rebuilds on its own.
+
 Built on Forge's engine — the model seam, the agent loop, and the
 judge are the same pieces `build`/`refine` use. New in `src/minion/`:
 `workspace.ts` (the sandbox boundary + role-based write permissions),
 `test-runner.ts` (runner detection + result parsing), `mutate.ts` (mutation
 engine + diff parsing), `spec.ts` (the spec-author / reproduction mode),
-`tools.ts` (the write-capable tools), `minion.ts` (the loop + gates).
+`scope.ts` (ticket/stack-trace scoping), `profile.ts` (the per-repo learning
+cache), `tools.ts` (the write-capable tools), `minion.ts` (the loop + gates).
 
 ## Why this shape
 
