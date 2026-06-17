@@ -1,5 +1,23 @@
 # Agent Forge
 
+> Agents that do real work — and prove it. Forge **builds** agents from plain
+> English; its **minions** fix real GitHub and Linear tickets and open pull
+> requests only when the tests prove the fix.
+
+**Highlights**
+
+- 🏭 **Forge** generates an agent *and its own acceptance tests*, then tests → repairs → re-tests until it passes.
+- 🤖 **Minions** fix a ticket on a sandbox clone and open a **verified** pull request — only when a failing test goes green with no regressions. **Zero unsafe ships** on a labeled eval.
+- 🔒 **A gate that's hard to game** — the harness re-runs the tests (never the model's word), minions can't edit tests, and **mutation testing** + flaky-guarding sit under an independent LLM judge.
+- 🧪 **Reproduction mode** — a separate spec-author minion writes *only* a failing test for an untested bug, keeping the test-writer and the fixer apart.
+- 🧠 **Repo-agnostic & self-sharpening** — auto-detects the test runner (Vitest / Jest / Mocha / Go / node:test), scopes from the ticket's stack trace, and remembers each repo between runs.
+- 💬 **Front doors** — run it from the CLI, or just chat with a Slack bot: *"show me the issues in ENG"* → *"work on the login bug."*
+- 🧾 **Auditable** — every run leaves a receipt, and `forge corpus` checks what humans did with each PR so "zero unsafe ships" stays honest over time.
+
+_New here? The two sections that follow — **Forge** then **Minions** — are the whole story; everything below is detail._
+
+---
+
 **An agent that builds agents.** You describe an automation in plain English;
 Forge designs a working agent for it — system prompt, tools, *and its own
 acceptance tests* — then **tests it, and if it fails, fixes it and tests again**
@@ -109,6 +127,12 @@ a human. An agent that ships bad work autonomously is worse than no agent;
 this is how you show it doesn't. Full report:
 [`examples/minions/eval-report.json`](examples/minions/eval-report.json).
 
+And `forge corpus` keeps that honest *over time*: it checks what humans actually
+did with each shipped PR — merged (a confirmed good ship) or closed unmerged (a
+real counterexample) — and turns any rejection into a new labeled eval case. Run
+it on a cron and "zero unsafe ships" becomes a number you defend continuously,
+not once.
+
 ### Real pull requests, not just a sandbox
 
 `forge pr <owner/repo> <issue>` runs the *same* minion and the *same* gates on
@@ -137,6 +161,7 @@ forge fleet --once            # drain the current backlog and exit
 forge eval                    # measure the gate on a labeled set (0 unsafe ships)
 forge pr <owner/repo> <n>     # fix a real GitHub issue and open a real pull request
 forge spec <owner/repo> <n>   # write a failing reproduction test for an issue (no fix), open it for review
+forge corpus                  # check what humans did with shipped PRs — defend zero-unsafe-ships over time
 ```
 
 ### Reproduction-only mode: a spec-author minion
@@ -240,7 +265,8 @@ judge are the same pieces `build`/`refine` use. New in `src/minion/`:
 `test-runner.ts` (runner detection + result parsing), `mutate.ts` (mutation
 engine + diff parsing), `spec.ts` (the spec-author / reproduction mode),
 `scope.ts` (ticket/stack-trace scoping), `profile.ts` (the per-repo learning
-cache), `tools.ts` (the write-capable tools), `minion.ts` (the loop + gates).
+cache), `corpus.ts` (the PR-outcome corpus), `tools.ts` (the write-capable
+tools), `minion.ts` (the loop + gates).
 
 ## Why this shape
 
@@ -334,25 +360,29 @@ A built example agent and its receipt live in
 
 ## Roadmap
 
-Done:
+**Done — Forge (the factory)**
 
 - ✅ Build agents from plain English, with auto-generated acceptance tests.
 - ✅ Independent LLM-judge grading on behavior, not strings.
-- ✅ **Self-repair loop** — test → repair → re-test, with an audit receipt.
+- ✅ Self-repair loop — test → repair → re-test, with an audit receipt.
 
-Next, in order of leverage:
+**Done — Minions (what it makes)**
 
-- **Tool synthesis.** Today agents can only use the built-in tools. Let the
-  builder *write* a new typed tool when the task needs one — sandboxed, and
-  behind an approval gate before it ever runs. This is the real ceiling-remover.
+- ✅ Autonomous, verified pull requests on a sandbox *and* real GitHub repos — zero unsafe ships on a labeled eval.
+- ✅ A gate that's hard to game — mutation testing + flaky-test guarding beneath the LLM judge.
+- ✅ Spec-author / reproduction mode — failing tests for untested bugs, with separation of powers.
+- ✅ Repo-agnostic test-runner detection, ticket/stack-trace scoping, and a per-repo learning profile.
+- ✅ Slack + Linear front door, and an outcome corpus that defends the safety record over time.
+
+**Next, in order of leverage**
+
+- **Tool synthesis.** Let the builder *write* a new typed tool when a task needs
+  one — sandboxed, behind an approval gate. The real ceiling-remover.
+- **Hosted, sandboxed runs.** Run minions in an ephemeral container on a server
+  (token-based `gh` auth) for always-on operation that isolates untrusted
+  repo-test execution.
 - **Judge panel.** Replace the single judge with a panel of independent judges
-  and a majority vote, the way a serious eval harness treats a finding it's
-  unsure about — so the receipts are trustworthy, not decorative.
+  and a majority vote, so the receipts are trustworthy, not decorative.
 - **A live web surface.** Watch the build → test → repair loop stream in a
-  browser, with the receipt rendered at the end, plus a public gallery of built
-  agents.
-- **Write tools behind a human-in-the-loop gate.** Everything is read-only by
-  design today; side-effecting tools (send email, write file) require a
-  confirmation step, not optional.
-- **Cost/latency tracking** per build/run/repair, to make the economics of a
-  generated agent visible.
+  browser, with the receipt rendered at the end.
+- **Cost/latency tracking** per build/run/repair, to make the economics visible.
