@@ -188,9 +188,18 @@ ticket → study the whole codebase (read-only) → write a plan
             read code + tests · edit SOURCE only · run tests · iterate
        → harness re-runs the repo's OWN tests (ground truth)
        → gate: a failing test went green AND nothing regressed?
+       → mutation check: mangle the fix's own lines — does the test catch it?
        → judge: is the diff a legitimate, minimal fix (not gamed)?
        → SHIP (human commit + PR) + receipt, or DECLINE + receipt
 ```
+
+**Hard to game.** A green test proves the test is satisfied, not that the fix
+is real. Two mechanical layers sit under the LLM judge: **mutation testing**
+perturbs the fix's own lines (delete them, flip a comparison, bump a constant)
+and re-runs — if the now-green test survives every mutation, the test is not
+actually pinning the fix, so the minion declines as likely gamed. And
+**flaky-test guarding** (`MINION_TEST_RUNS`) runs the suite N times and trusts a
+test only if it passes every run, so a flaky green never earns a ship.
 
 **Repo-agnostic by design.** A minion orients before it acts (it reads across
 the codebase and plans first), and it runs whatever test command the repo
@@ -204,8 +213,8 @@ not a code change.
 Built on Forge's engine — the model seam, the agent loop, and the
 judge are the same pieces `build`/`refine` use. New in `src/minion/`:
 `workspace.ts` (the sandbox boundary), `test-runner.ts` (runner detection +
-result parsing), `tools.ts` (the write-capable tools), `minion.ts` (the loop +
-gates).
+result parsing), `mutate.ts` (mutation engine + diff parsing), `tools.ts` (the
+write-capable tools), `minion.ts` (the loop + gates).
 
 ## Why this shape
 

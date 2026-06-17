@@ -9,7 +9,8 @@ import {
 } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { detectTestCommand, parseTestOutput } from "./test-runner";
+import { detectTestCommand, parseTestOutput, type ParsedTests } from "./test-runner";
+import { parseAddedLines } from "./mutate";
 
 /**
  * A Workspace is the minion's sandbox boundary. Every run gets a fresh,
@@ -58,6 +59,23 @@ const IGNORE = new Set([
 function git(cwd: string, args: string[]): string {
   const res = spawnSync("git", args, { cwd, encoding: "utf8" });
   return (res.stdout || "") + (res.stderr || "");
+}
+
+/** Combine two test runs conservatively: a test passes only if it passed in both. */
+function mergeStable(a: ParsedTests, b: ParsedTests): ParsedTests {
+  const names = new Set([...Object.keys(a.tests), ...Object.keys(b.tests)]);
+  const tests: Record<string, boolean> = {};
+  for (const n of names) tests[n] = a.tests[n] === true && b.tests[n] === true;
+  const values = Object.values(tests);
+  const passed = values.filter(Boolean).length;
+  return {
+    tests,
+    passed,
+    failed: values.length - passed,
+    total: values.length,
+    ok: a.ok && b.ok,
+    perTest: a.perTest && b.perTest,
+  };
 }
 
 export class Workspace {
@@ -124,21 +142,49 @@ export class Workspace {
    * this Node version), and the TAP `ok/not ok` lines are parsed into a
    * per-test map so the caller can detect regressions by name.
    */
-  runTests(): TestResult {
-    const cmd = detectTestCommand(this.root);
+  private runOnce(cmd: ReturnType<typeof detectTestCommand>): { parsed: ParsedTests; output: string } {
     const res = spawnSync(cmd.argv[0], cmd.argv.slice(1), {
       cwd: this.root,
       encoding: "utf8",
       timeout: 120_000,
     });
     const output = (res.stdout || "") + (res.stderr || "");
-    const parsed = parseTestOutput(cmd.format, output, res.status ?? 1);
-    return { ...parsed, output };
+    return { parsed: parseTestOutput(cmd.format, output, res.status ?? 1), output };
+  }
+
+  /**
+   * Run the suite `runs` times and aggregate conservatively: a test counts as
+   * passing only if it passed in EVERY run (so a flaky green never earns a
+   * red→green ship, and a flaky red never triggers a phantom regression).
+   * `runs` defaults to MINION_TEST_RUNS or 1.
+   */
+  runTests(runs?: number): TestResult {
+    const cmd = detectTestCommand(this.root);
+    const n = Math.max(1, runs ?? (Number(process.env.MINION_TEST_RUNS) || 1));
+    let agg: ParsedTests | null = null;
+    let output = "";
+    for (let i = 0; i < n; i++) {
+      const r = this.runOnce(cmd);
+      output = r.output;
+      agg = agg ? mergeStable(agg, r.parsed) : r.parsed;
+    }
+    return { ...(agg as ParsedTests), output };
   }
 
   /** A short description of how this repo's tests are run (for receipts/logs). */
   testCommand(): string {
     return detectTestCommand(this.root).how;
+  }
+
+  /** Added (new) source line numbers per file in the staged diff — mutation targets. */
+  changedSourceLines(): Record<string, number[]> {
+    const diff = git(this.root, ["diff", "--cached", "--unified=0"]);
+    const all = parseAddedLines(diff);
+    const out: Record<string, number[]> = {};
+    for (const [file, lines] of Object.entries(all)) {
+      if (!this.isProtected(file)) out[file] = lines;
+    }
+    return out;
   }
 
   /** Stage everything and return the unified diff vs. the pristine baseline. */

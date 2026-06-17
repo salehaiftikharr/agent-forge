@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { getModel, modelLabel } from "../model";
 import { prepareWorkspace, type TestResult, type Workspace } from "./workspace";
 import { minionTools, minionReadTools } from "./tools";
+import { generateMutants } from "./mutate";
 
 /**
  * A minion: an autonomous agent that takes one ticket and tries to close it on
@@ -109,6 +110,56 @@ async function judgeChange(
   return object;
 }
 
+/**
+ * Mutation gate: perturb the fix's own lines (delete them, flip comparisons,
+ * swap constants) and re-run. If the previously-green result survives EVERY
+ * mutation, the test is not actually pinning the fix — likely gamed or
+ * hard-coded — so decline. Mechanical, no model involved. Capped by
+ * MINION_MUTANTS (default 6; 0 disables). Always restores the real fix.
+ */
+function runMutationGate(
+  workspace: Workspace,
+  perTestMode: boolean,
+  newPasses: string[],
+  log: (m: string) => void,
+): string | null {
+  const cap = process.env.MINION_MUTANTS != null ? Number(process.env.MINION_MUTANTS) : 6;
+  if (!Number.isFinite(cap) || cap <= 0) return null;
+
+  const changed = workspace.changedSourceLines();
+  const files = Object.keys(changed);
+  if (files.length === 0) return null;
+
+  const stillFixed = (r: TestResult): boolean =>
+    perTestMode ? newPasses.every((n) => r.tests[n] === true) : r.ok;
+
+  let total = 0;
+  let caught = 0;
+  for (const file of files) {
+    if (total >= cap) break;
+    const original = workspace.read(file);
+    const perFile = Math.max(1, Math.ceil(cap / files.length));
+    try {
+      for (const mutant of generateMutants(original, changed[file], perFile)) {
+        if (total >= cap) break;
+        workspace.write(file, mutant.content);
+        const survived = stillFixed(workspace.runTests(1));
+        total += 1;
+        if (!survived) caught += 1;
+      }
+    } finally {
+      workspace.write(file, original); // always put the real fix back
+    }
+  }
+
+  if (total === 0) return null; // nothing mutatable — can't assess, don't block
+  log(`mutation check: ${caught}/${total} mutants caught`);
+  if (caught === 0) {
+    return "Mutation check failed: the changed code could be deleted or its logic flipped and the previously-failing test still passed, so the test is not actually pinning the fix. Declined as likely gamed.";
+  }
+  return null;
+}
+
 export interface Decision {
   /** "approved" = passed every gate, ready for the caller to ship. */
   status: "approved" | "declined" | "error";
@@ -202,15 +253,16 @@ export async function workTicket(
     toolCalls,
   });
 
-  // Gate 1: no regressions, and real progress. When the runner gives a per-test
-  // map we reason test-by-test (so unrelated failing tests can stay failing).
-  // When it only gives an exit code, we require the whole suite to flip from
-  // failing to passing — and never the reverse.
-  if (baseline.perTest && finalTests.perTest) {
+  // Gate 1: no regressions, and real progress. With a per-test map we reason
+  // test-by-test (so unrelated failing tests can stay failing); with only an
+  // exit code we require the whole suite to flip from failing to passing.
+  const perTestMode = baseline.perTest && finalTests.perTest;
+  let newPasses: string[] = [];
+  if (perTestMode) {
     const regressions = Object.keys(baseline.tests).filter(
       (name) => baseline.tests[name] && finalTests.tests[name] === false,
     );
-    const newPasses = Object.keys(finalTests.tests).filter(
+    newPasses = Object.keys(finalTests.tests).filter(
       (name) => finalTests.tests[name] && baseline.tests[name] === false,
     );
     if (regressions.length > 0) {
@@ -239,6 +291,13 @@ export async function workTicket(
       );
     }
   }
+
+  // Gate 1.5: mutation testing. A green test proves the test is satisfied, not
+  // that the fix is real. Perturb the changed lines and re-run — if the
+  // now-green result survives every mutation, the test is not pinning the fix.
+  log("mutation-testing the fix…");
+  const mutationReason = runMutationGate(workspace, perTestMode, newPasses, log);
+  if (mutationReason) return decided("declined", mutationReason);
 
   // Gate 2: the change must be a legitimate, minimal fix, not gamed.
   const verdict = await judgeChange(ticket, patch, opts.provider);
