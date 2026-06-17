@@ -78,6 +78,50 @@ export function minionTools(ws: Workspace): Record<string, Tool> {
   };
 }
 
+/**
+ * Tools for a SPEC-AUTHOR minion: read the codebase and write a failing test
+ * (the gate), but never source. The inverse of a fixer — this is what keeps the
+ * test-writer and the fixer separate.
+ */
+export function specTools(ws: Workspace): Record<string, Tool> {
+  return {
+    ...minionReadTools(ws),
+
+    write_test: tool({
+      description:
+        "Create or overwrite a TEST file with a failing test that reproduces the issue. You may write ONLY test files, never source — you are authoring the gate, not the fix.",
+      inputSchema: z.object({
+        path: z.string().describe("Repo-relative test path, e.g. test/clamp.test.js"),
+        content: z.string().describe("The complete test file contents."),
+      }),
+      execute: async ({ path, content }) => {
+        try {
+          ws.write(path, content);
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: errMsg(error) };
+        }
+      },
+    }),
+
+    run_tests: tool({
+      description:
+        "Run the full test suite. Use this to confirm your new test FAILS against the current code — a reproduction that already passes is not a reproduction.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const r = ws.runTests();
+        return {
+          allPassing: r.ok,
+          passed: r.passed,
+          failed: r.failed,
+          total: r.total,
+          output: r.output.slice(-3000),
+        };
+      },
+    }),
+  };
+}
+
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

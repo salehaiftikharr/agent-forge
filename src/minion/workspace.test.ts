@@ -26,3 +26,13 @@ test("isProtected leaves real source files writable", () => {
     assert.equal(ws.isProtected(p), false, `${p} should be writable`);
   }
 });
+
+test("separation of powers: fixer writes source only, spec-author writes tests only", () => {
+  const fixer = new Workspace("/tmp/x", "fixer");
+  assert.equal(fixer.canWrite("src/utils.js").ok, true);
+  assert.equal(fixer.canWrite("test/utils.test.js").ok, false);
+
+  const author = new Workspace("/tmp/x", "spec-author");
+  assert.equal(author.canWrite("test/utils.test.js").ok, true);
+  assert.equal(author.canWrite("src/utils.js").ok, false);
+});

@@ -78,8 +78,18 @@ function mergeStable(a: ParsedTests, b: ParsedTests): ParsedTests {
   };
 }
 
+export type WorkspaceRole = "fixer" | "spec-author";
+
 export class Workspace {
-  constructor(readonly root: string) {}
+  /**
+   * `role` enforces separation of powers: a "fixer" edits source but never the
+   * tests it's judged against; a "spec-author" writes only tests (a failing
+   * reproduction) and never the implementation. Neither can do both jobs.
+   */
+  constructor(
+    readonly root: string,
+    readonly role: WorkspaceRole = "fixer",
+  ) {}
 
   /** Resolve a repo-relative path, refusing anything that escapes the root. */
   private resolve(rel: string): string {
@@ -112,12 +122,27 @@ export class Workspace {
     return readFileSync(this.resolve(rel), "utf8");
   }
 
-  write(rel: string, content: string): void {
-    if (this.isProtected(rel)) {
-      throw new Error(
-        `Refusing to write to a test file (${rel}). Minions edit source, never the tests they're judged against.`,
-      );
+  /** Whether this role may write `rel`, with the reason if not (pure). */
+  canWrite(rel: string): { ok: boolean; reason?: string } {
+    const isTest = this.isProtected(rel);
+    if (this.role === "fixer" && isTest) {
+      return {
+        ok: false,
+        reason: `Refusing to write to a test file (${rel}). Minions edit source, never the tests they're judged against.`,
+      };
     }
+    if (this.role === "spec-author" && !isTest) {
+      return {
+        ok: false,
+        reason: `Refusing to write to a source file (${rel}). A spec author writes only tests, never the implementation.`,
+      };
+    }
+    return { ok: true };
+  }
+
+  write(rel: string, content: string): void {
+    const verdict = this.canWrite(rel);
+    if (!verdict.ok) throw new Error(verdict.reason);
     writeFileSync(this.resolve(rel), content);
   }
 

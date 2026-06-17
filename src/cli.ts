@@ -25,7 +25,8 @@ import { refineAgent } from "./refine";
 import { runMinion, type Ticket, type MinionReceipt } from "./minion/minion";
 import { runFleet } from "./minion/fleet";
 import { evaluateMinions } from "./minion/evaluate";
-import { runMinionPR } from "./minion/github";
+import { runMinionPR, fetchIssue } from "./minion/github";
+import { openSpecPR } from "./minion/spec";
 import { runMinionForLinear } from "./linear/dispatch";
 import {
   saveSpec,
@@ -263,6 +264,33 @@ async function main(): Promise<void> {
       console.log("");
       if (receipt.status === "shipped" && receipt.prUrl) {
         console.log(`✓ opened a pull request: ${receipt.prUrl}`);
+        console.log(`  ${receipt.reason}`);
+      } else {
+        console.log(`⊘ ${receipt.status} — ${receipt.reason}\n  No PR opened.`);
+      }
+      break;
+    }
+
+    case "spec": {
+      const [repo, issueArg] = rest;
+      const issueNumber = Number(issueArg);
+      if (!repo || !issueNumber) {
+        fail(
+          "Usage: forge spec <owner/repo> <issue-number>  (writes a failing reproduction test and opens a PR for review — no fix)",
+        );
+      }
+      console.log(
+        `Spec-author on ${repo}#${issueNumber} with ${modelLabel(provider)} — writing a failing test, no fix…\n`,
+      );
+      const issue = fetchIssue(repo, issueNumber);
+      const receipt = await openSpecPR(
+        repo,
+        { id: `issue-${issueNumber}`, title: issue.title, body: issue.body },
+        { provider, reference: `Reproduces #${issueNumber}.`, onProgress: (m) => console.log(`  ${m}`) },
+      );
+      console.log("");
+      if (receipt.status === "authored" && receipt.prUrl) {
+        console.log(`✓ opened a reproduction-test PR for review: ${receipt.prUrl}`);
         console.log(`  ${receipt.reason}`);
       } else {
         console.log(`⊘ ${receipt.status} — ${receipt.reason}\n  No PR opened.`);

@@ -34,7 +34,7 @@ interface Issue {
   body: string;
 }
 
-function fetchIssue(repo: string, issueNumber: number): Issue {
+export function fetchIssue(repo: string, issueNumber: number): Issue {
   const res = run("gh", [
     "issue",
     "view",

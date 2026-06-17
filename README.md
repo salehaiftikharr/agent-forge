@@ -136,7 +136,23 @@ forge fleet                   # run continuously — pick up new/changed tickets
 forge fleet --once            # drain the current backlog and exit
 forge eval                    # measure the gate on a labeled set (0 unsafe ships)
 forge pr <owner/repo> <n>     # fix a real GitHub issue and open a real pull request
+forge spec <owner/repo> <n>   # write a failing reproduction test for an issue (no fix), open it for review
 ```
+
+### Reproduction-only mode: a spec-author minion
+
+A fixer ships only when a *previously-failing* test goes green — great for
+safety, but it means a ticket with no test coverage is an automatic decline.
+The clean way to loosen that without letting the fixer grade itself is to
+**split the role**: `forge spec <owner/repo> <n>` dispatches a separate
+**spec-author** minion that reads the ticket, writes *only* a failing
+reproduction test, confirms it fails against the current code, and stops —
+opening a PR with just that test for a human to approve. A fixer (which can
+write source but never tests) is then pointed at the approved gate it never
+authored. Separation of powers holds: one minion writes the gate, a different
+one fixes against it, and neither can do both (enforced in `workspace.ts` by
+role). A failing reproduction is useful output on its own, even with no fix
+attached.
 
 ### Talk to your minions in Slack
 
@@ -212,9 +228,10 @@ not a code change.
 
 Built on Forge's engine — the model seam, the agent loop, and the
 judge are the same pieces `build`/`refine` use. New in `src/minion/`:
-`workspace.ts` (the sandbox boundary), `test-runner.ts` (runner detection +
-result parsing), `mutate.ts` (mutation engine + diff parsing), `tools.ts` (the
-write-capable tools), `minion.ts` (the loop + gates).
+`workspace.ts` (the sandbox boundary + role-based write permissions),
+`test-runner.ts` (runner detection + result parsing), `mutate.ts` (mutation
+engine + diff parsing), `spec.ts` (the spec-author / reproduction mode),
+`tools.ts` (the write-capable tools), `minion.ts` (the loop + gates).
 
 ## Why this shape
 
