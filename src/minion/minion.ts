@@ -8,6 +8,8 @@ import { minionTools, minionReadTools } from "./tools";
 import { generateMutants } from "./mutate";
 import { extractFileHints, resolveHints, buildScopeNote } from "./scope";
 import { loadProfile, saveProfile, mergeProfile } from "./profile";
+import { assessRisk, type RiskAssessment } from "./risk";
+import { confidenceFor, type Confidence } from "./confidence";
 
 /**
  * A minion: an autonomous agent that takes one ticket and tries to close it on
@@ -41,6 +43,12 @@ export interface MinionReceipt {
   baselineTests: { passed: number; total: number };
   finalTests: { ok: boolean; passed: number; failed: number; total: number };
   patch: string;
+  /** Calibrated 0..1 confidence and its level, when the change was approved. */
+  confidence?: { score: number; level: "high" | "medium" | "low" };
+  /** Blast-radius assessment of the diff, when the change was approved. */
+  risk?: { level: "low" | "medium" | "high"; score: number; factors: string[] };
+  /** True when an approved change was sent for human review (a draft PR). */
+  requiresReview?: boolean;
   /** Set when the minion opened a real pull request (the GitHub path). */
   prUrl?: string;
 }
@@ -119,18 +127,25 @@ async function judgeChange(
  * hard-coded — so decline. Mechanical, no model involved. Capped by
  * MINION_MUTANTS (default 6; 0 disables). Always restores the real fix.
  */
+interface MutationResult {
+  /** A decline reason if the change survived every mutant, else null. */
+  reason: string | null;
+  caught: number;
+  total: number;
+}
+
 function runMutationGate(
   workspace: Workspace,
   perTestMode: boolean,
   newPasses: string[],
   log: (m: string) => void,
-): string | null {
+): MutationResult {
   const cap = process.env.MINION_MUTANTS != null ? Number(process.env.MINION_MUTANTS) : 6;
-  if (!Number.isFinite(cap) || cap <= 0) return null;
+  if (!Number.isFinite(cap) || cap <= 0) return { reason: null, caught: 0, total: 0 };
 
   const changed = workspace.changedSourceLines();
   const files = Object.keys(changed);
-  if (files.length === 0) return null;
+  if (files.length === 0) return { reason: null, caught: 0, total: 0 };
 
   const stillFixed = (r: TestResult): boolean =>
     perTestMode ? newPasses.every((n) => r.tests[n] === true) : r.ok;
@@ -154,12 +169,17 @@ function runMutationGate(
     }
   }
 
-  if (total === 0) return null; // nothing mutatable — can't assess, don't block
+  if (total === 0) return { reason: null, caught: 0, total: 0 }; // nothing mutatable — can't assess, don't block
   log(`mutation check: ${caught}/${total} mutants caught`);
   if (caught === 0) {
-    return "Mutation check failed: the changed code could be deleted or its logic flipped and the previously-failing test still passed, so the test is not actually pinning the fix. Declined as likely gamed.";
+    return {
+      reason:
+        "Mutation check failed: the changed code could be deleted or its logic flipped and the previously-failing test still passed, so the test is not actually pinning the fix. Declined as likely gamed.",
+      caught,
+      total,
+    };
   }
-  return null;
+  return { reason: null, caught, total };
 }
 
 export interface Decision {
@@ -171,6 +191,33 @@ export interface Decision {
   finalTests: TestResult;
   steps: number;
   toolCalls: number;
+  /** Calibrated 0..1 confidence + level (only meaningful when approved). */
+  confidence: Confidence;
+  /** Blast-radius assessment of the diff (only meaningful when approved). */
+  risk: RiskAssessment;
+  /**
+   * True when an approved change should still go to a human before merge —
+   * low confidence or high blast radius. The caller opens it as a draft PR
+   * rather than a ready-to-merge one. This is the auto-ship gate.
+   */
+  requiresReview: boolean;
+}
+
+/** Confidence/risk placeholders for the paths that never reach scoring. */
+const NO_CONFIDENCE: Confidence = { score: 0, level: "low" };
+const NO_RISK: RiskAssessment = {
+  level: "low",
+  score: 0,
+  factors: [],
+  filesChanged: 0,
+  linesAdded: 0,
+  linesRemoved: 0,
+};
+
+/** Auto-ship floor: at or above this confidence, and not high-risk, ships ready-to-merge. */
+function confidenceFloor(): number {
+  const v = Number(process.env.MINION_CONFIDENCE_MIN);
+  return Number.isFinite(v) && v > 0 && v <= 1 ? v : 0.7;
 }
 
 /**
@@ -255,6 +302,9 @@ export async function workTicket(
       finalTests: baseline,
       steps,
       toolCalls,
+      confidence: NO_CONFIDENCE,
+      risk: NO_RISK,
+      requiresReview: false,
     };
   }
 
@@ -284,6 +334,9 @@ export async function workTicket(
     finalTests,
     steps,
     toolCalls,
+    confidence: NO_CONFIDENCE,
+    risk: NO_RISK,
+    requiresReview: false,
   });
 
   // Gate 1: no regressions, and real progress. With a per-test map we reason
@@ -329,8 +382,8 @@ export async function workTicket(
   // that the fix is real. Perturb the changed lines and re-run — if the
   // now-green result survives every mutation, the test is not pinning the fix.
   log("mutation-testing the fix…");
-  const mutationReason = runMutationGate(workspace, perTestMode, newPasses, log);
-  if (mutationReason) return decided("declined", mutationReason);
+  const mutation = runMutationGate(workspace, perTestMode, newPasses, log);
+  if (mutation.reason) return decided("declined", mutation.reason);
 
   // Gate 2: the change must be a legitimate, minimal fix, not gamed.
   const verdict = await judgeChange(ticket, patch, opts.provider);
@@ -340,7 +393,41 @@ export async function workTicket(
       `Tests pass, but the change was rejected on review: ${verdict.reason}`,
     );
   }
-  return decided("approved", verdict.reason);
+
+  // Approved — every gate passed. Now score HOW the change should ship: assess
+  // its blast radius, turn the gate signals into a calibrated confidence, and
+  // decide whether it can ship ready-to-merge or should go to a human as a
+  // draft. This never blocks a correct change; it only chooses the lane.
+  const risk = assessRisk(patch);
+  const confidence = confidenceFor(
+    {
+      newPasses: newPasses.length,
+      mutantsCaught: mutation.caught,
+      mutantsTotal: mutation.total,
+      judgeResolves: verdict.genuinelyResolves,
+    },
+    risk,
+  );
+  const requiresReview =
+    confidence.score < confidenceFloor() || risk.level === "high";
+  log(
+    `confidence ${confidence.score.toFixed(2)} (${confidence.level}) · risk ${risk.level} — ${
+      requiresReview ? "opening as a draft for review" : "clear to auto-ship"
+    }`,
+  );
+
+  return {
+    status: "approved",
+    reason: verdict.reason,
+    patch,
+    baseline,
+    finalTests,
+    steps,
+    toolCalls,
+    confidence,
+    risk,
+    requiresReview,
+  };
 }
 
 /** Run a minion on a sandbox copy (the local demo path). */
@@ -365,11 +452,28 @@ export async function runMinion(
     baselineTests: { passed: decision.baseline.passed, total: decision.baseline.total },
     finalTests: testToReceipt(decision.finalTests),
     patch: decision.patch,
+    ...decisionScores(decision),
   });
 }
 
 export function testToReceipt(t: TestResult) {
   return { ok: t.ok, passed: t.passed, failed: t.failed, total: t.total };
+}
+
+/** The confidence/risk fields for a receipt — only populated on an approved change. */
+export function decisionScores(
+  decision: Decision,
+): Pick<MinionReceipt, "confidence" | "risk" | "requiresReview"> {
+  if (decision.status !== "approved") return {};
+  return {
+    confidence: { score: decision.confidence.score, level: decision.confidence.level },
+    risk: {
+      level: decision.risk.level,
+      score: decision.risk.score,
+      factors: decision.risk.factors,
+    },
+    requiresReview: decision.requiresReview,
+  };
 }
 
 export function writeReceipt(receipt: MinionReceipt): MinionReceipt {

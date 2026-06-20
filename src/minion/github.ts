@@ -6,6 +6,8 @@ import {
   workTicket,
   writeReceipt,
   testToReceipt,
+  decisionScores,
+  type Decision,
   type MinionReceipt,
   type Ticket,
 } from "./minion";
@@ -125,38 +127,65 @@ export async function openPullRequest(
     baselineTests: { passed: decision.baseline.passed, total: decision.baseline.total },
     finalTests: testToReceipt(decision.finalTests),
     patch: decision.patch,
+    ...decisionScores(decision),
   };
 
   if (decision.status !== "approved") {
     return writeReceipt(receiptBase);
   }
 
-  // Approved — ship it for real: commit, push the branch, open the PR.
-  log("approved — pushing branch and opening PR…");
+  // Approved — ship it for real: commit, push the branch, open the PR. A change
+  // that cleared every gate but came back low-confidence or high-blast-radius
+  // opens as a DRAFT, so a human looks before it can merge; a high-confidence,
+  // low-risk change opens ready for review.
+  log(
+    decision.requiresReview
+      ? "approved — opening a draft PR for review…"
+      : "approved — pushing branch and opening PR…",
+  );
   workspace.commit(ticket.title); // a plain, human one-liner; no trailers or credits
   const push = run("git", ["push", "-u", "origin", branch], workDir);
   if (!push.ok) throw new Error(`Push failed: ${push.err || push.out}`);
 
-  // A clean, human PR body: the reference (if any) and a short summary. No footer.
-  const body = [opts.reference, decision.reason].filter(Boolean).join("\n\n");
-  const pr = run("gh", [
-    "pr",
-    "create",
-    "--repo",
-    repo,
-    "--base",
-    baseBranch,
-    "--head",
-    branch,
-    "--title",
-    ticket.title,
-    "--body",
-    body,
-  ]);
+  const args = [
+    "pr", "create",
+    "--repo", repo,
+    "--base", baseBranch,
+    "--head", branch,
+    "--title", ticket.title,
+    "--body", buildPrBody(opts.reference, decision),
+  ];
+  if (decision.requiresReview) args.push("--draft");
+  const pr = run("gh", args);
   if (!pr.ok) throw new Error(`PR create failed: ${pr.err || pr.out}`);
   const prUrl = pr.out.split("\n").find((l) => l.startsWith("http")) ?? pr.out;
 
   return writeReceipt({ ...receiptBase, prUrl });
+}
+
+/**
+ * The PR body the minion writes for a human reviewer. Stays human-toned (this
+ * project deliberately ships PRs without bot signatures), but shows its work:
+ * what changed and exactly how it was verified — the test delta, the mutation
+ * score, the confidence, and the blast radius — so approving takes seconds.
+ */
+function buildPrBody(reference: string | undefined, decision: Decision): string {
+  const { baseline, finalTests, confidence, risk } = decision;
+  const verification = [
+    `- Tests: ${baseline.passed}/${baseline.total} → ${finalTests.passed}/${finalTests.total} passing, no regressions`,
+    `- Confidence: ${confidence.score.toFixed(2)} (${confidence.level})`,
+    `- Blast radius: ${risk.level} — ${risk.factors.join(", ")}`,
+  ];
+  const reviewNote = decision.requiresReview
+    ? "\n\nOpened as a draft: this cleared every automated gate but is low-confidence or high blast radius, so it wants a human glance before merge."
+    : "";
+  return [
+    reference,
+    decision.reason,
+    `## How this was verified\n${verification.join("\n")}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n") + reviewNote;
 }
 
 /** GitHub-issue source: read the issue via `gh`, then open a PR for it. */
