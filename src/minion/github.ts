@@ -58,6 +58,8 @@ export interface PrOptions {
   baseBranch?: string;
   /** A line for the top of the PR body, e.g. "Closes #3." or "Linear: ENG-123". */
   reference?: string;
+  /** Best-of-N: independent candidate fixes to try before opening the PR (default 1). */
+  candidates?: number;
   onProgress?: (m: string) => void;
 }
 

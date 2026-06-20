@@ -10,6 +10,7 @@
 - 🤖 **Minions** fix a ticket on a sandbox clone and open a **verified** pull request — only when a failing test goes green with no regressions. **Zero unsafe ships** on a labeled eval.
 - 🔒 **A gate that's hard to game** — the harness re-runs the tests (never the model's word), minions can't edit tests, and **mutation testing** + flaky-guarding sit under an independent LLM judge.
 - 🎯 **Confidence + blast-radius scoring** — a change that clears every gate is also *scored*: a calibrated 0–1 confidence (from mutation catch rate, tests flipped, the judge, and how much it touches) decides whether it ships ready-to-merge or opens as a **draft** for a human. Knowing how sure it is, is a feature.
+- 🏆 **Best-of-N tournament** — optionally generate several independent candidate fixes from the same plan, run each through the *full* gate, and ship only the strongest (highest confidence, then smallest blast radius and diff). More shots on goal, same bar.
 - 🧪 **Reproduction mode** — a separate spec-author minion writes *only* a failing test for an untested bug, keeping the test-writer and the fixer apart.
 - 🧠 **Repo-agnostic & self-sharpening** — auto-detects the test runner (Vitest / Jest / Mocha / Go / node:test), scopes from the ticket's stack trace, and remembers each repo between runs.
 - 💬 **Front doors** — run it from the CLI, or just chat with a Slack bot: *"show me the issues in ENG"* → *"work on the login bug."*
@@ -234,6 +235,9 @@ ticket → study the whole codebase (read-only) → write a plan
        → judge: is the diff a legitimate, minimal fix (not gamed)?
        → score: confidence (0–1) + blast radius → ship ready, or open a DRAFT
        → SHIP (human commit + PR) + receipt, or DECLINE + receipt
+
+   (best-of-N: run the implement→gate→score loop N times from a clean
+    baseline and keep the strongest candidate — see below)
 ```
 
 **Hard to game.** A green test proves the test is satisfied, not that the fix
@@ -257,6 +261,16 @@ threshold (`MINION_CONFIDENCE_MIN`, default `0.7`) is one number you can tune
 from the receipts — over a corpus you can say "shipped above 0.85, it was right
 N of N times" instead of trusting a vibe. This never blocks a correct change; it
 only chooses how it ships.
+
+**More shots on goal (best-of-N).** A single attempt is one sample of a
+stochastic model. Set `MINION_CANDIDATES` (or pass `candidates`) and the minion
+generates several independent fixes from the *same* plan — each starting from a
+clean baseline, blind to the others — runs every one through the full gate, and
+keeps the **strongest**: highest confidence, then smallest blast radius, then
+smallest diff. Losers are discarded; the winner is the only thing that ships, so
+the acceptance bar is unchanged — you are just giving a hard ticket more chances
+to clear it. It stops early once a candidate clears the auto-ship bar, so the
+common case stays cheap, and it is capped at 5 for cost.
 
 **Repo-agnostic by design.** A minion orients before it acts (it reads across
 the codebase and plans first), and it runs whatever test command the repo
@@ -283,7 +297,7 @@ engine + diff parsing), `spec.ts` (the spec-author / reproduction mode),
 `scope.ts` (ticket/stack-trace scoping), `profile.ts` (the per-repo learning
 cache), `corpus.ts` (the PR-outcome corpus), `risk.ts` (blast-radius scoring),
 `confidence.ts` (the calibrated confidence score), `tools.ts` (the write-capable
-tools), `minion.ts` (the loop + gates).
+tools), `minion.ts` (the loop, gates, and best-of-N tournament).
 
 ## Why this shape
 
@@ -388,6 +402,7 @@ A built example agent and its receipt live in
 - ✅ Autonomous, verified pull requests on a sandbox *and* real GitHub repos — zero unsafe ships on a labeled eval.
 - ✅ A gate that's hard to game — mutation testing + flaky-test guarding beneath the LLM judge.
 - ✅ Confidence + blast-radius scoring — approved changes ship ready-to-merge or open as a draft, by a tunable threshold.
+- ✅ Best-of-N tournament — independent candidate fixes compete through the full gate; only the strongest ships.
 - ✅ Spec-author / reproduction mode — failing tests for untested bugs, with separation of powers.
 - ✅ Repo-agnostic test-runner detection, ticket/stack-trace scoping, and a per-repo learning profile.
 - ✅ Slack + Linear front door, and an outcome corpus that defends the safety record over time.

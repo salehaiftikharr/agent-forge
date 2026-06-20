@@ -223,6 +223,36 @@ export class Workspace {
     git(this.root, ["add", "-A"]);
     git(this.root, ["commit", "-q", "-m", message]);
   }
+
+  /**
+   * Discard ALL working-tree changes and return to the branch's committed
+   * state (the pristine baseline). Used between tournament candidates so each
+   * one starts from the same clean slate, blind to the others.
+   */
+  reset(): void {
+    git(this.root, ["reset", "--hard", "-q", "HEAD"]);
+    git(this.root, ["clean", "-fdq"]);
+  }
+
+  /**
+   * Re-apply a unified diff (as produced by stagedDiff) onto the clean working
+   * tree. Used to restore the WINNING candidate after a tournament has reset
+   * past it. The context matches exactly because every candidate forks from the
+   * same baseline commit.
+   */
+  applyPatch(patch: string): void {
+    if (!patch.trim()) return;
+    // --index stages as it applies, so changedSourceLines() and commit() both
+    // see the restored winner (the working tree alone would not be staged).
+    const res = spawnSync("git", ["apply", "--index", "--whitespace=nowarn"], {
+      cwd: this.root,
+      input: patch.endsWith("\n") ? patch : patch + "\n",
+      encoding: "utf8",
+    });
+    if (res.status !== 0) {
+      throw new Error(`Could not re-apply the winning candidate's patch: ${res.stderr || res.stdout}`);
+    }
+  }
 }
 
 /**

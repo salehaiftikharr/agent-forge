@@ -239,6 +239,8 @@ export async function workTicket(
     onPlanReady?: () => void;
     /** A stable key (e.g. the repo) for the per-repo profile that seeds and learns across runs. */
     repoKey?: string;
+    /** Best-of-N: how many independent candidate fixes to try (default 1; also MINION_CANDIDATES). */
+    candidates?: number;
   } = {},
 ): Promise<Decision> {
   const log = opts.onProgress ?? (() => {});
@@ -259,9 +261,11 @@ export async function workTicket(
 
   let steps = 0;
   let toolCalls = 0;
+
+  // Phase 1 — orient and plan: understand the code and decide the change BEFORE
+  // writing anything. A plan failure is the one thing that ends the run here.
+  let plan: string;
   try {
-    // Phase 1 — orient and plan: understand the code and decide the change
-    // BEFORE writing anything.
     if (hints.length) log(`scope hints: ${hints.join(", ")}`);
     log("studying the codebase…");
     const planResult = await generateText({
@@ -274,47 +278,74 @@ export async function workTicket(
       tools: minionReadTools(workspace),
       stopWhen: stepCountIs(8),
     });
-    const plan = planResult.text.trim();
+    plan = planResult.text.trim();
     steps += planResult.steps.length;
     toolCalls += planResult.steps.flatMap((s) => s.toolCalls ?? []).length;
     log(`plan ready — ${firstLine(plan)}`);
-
-    // Only now, with the codebase understood and a plan in hand, branch off main.
-    opts.onPlanReady?.();
-
-    // Phase 2 — implement the plan.
-    log("implementing…");
-    const result = await generateText({
-      model: getModel(opts.provider),
-      system: implementSystemPrompt(),
-      prompt: `Ticket:\n\n[${ticket.id}] ${ticket.title}\n${ticket.body}\n\nYour plan:\n${plan}\n\nImplement it now.`,
-      tools: minionTools(workspace),
-      stopWhen: stepCountIs(opts.maxSteps ?? 14),
-    });
-    steps += result.steps.length;
-    toolCalls += result.steps.flatMap((s) => s.toolCalls ?? []).length;
   } catch (error) {
-    return {
-      status: "error",
-      reason: error instanceof Error ? error.message : String(error),
-      patch: "",
-      baseline,
-      finalTests: baseline,
-      steps,
-      toolCalls,
-      confidence: NO_CONFIDENCE,
-      risk: NO_RISK,
-      requiresReview: false,
-    };
+    return errorDecision(error, baseline, steps, toolCalls);
   }
 
-  // Ground truth: re-run the tests ourselves. Never trust the model's claim.
-  const finalTests = workspace.runTests();
-  const patch = workspace.stagedDiff();
-  log(`final: ${finalTests.passed}/${finalTests.total} passing — verifying…`);
+  // Only now, with the codebase understood and a plan in hand, branch off main.
+  opts.onPlanReady?.();
+
+  // Phase 2 — implement and gate, possibly several independent times. Best-of-N:
+  // each candidate implements the SAME plan from a clean baseline, blind to the
+  // others, and runs the full gate; we keep the strongest one. One attempt by
+  // default — opts.candidates / MINION_CANDIDATES turns the tournament on.
+  const n = candidateCount(opts);
+  const attempts: Decision[] = [];
+  for (let i = 0; i < n; i++) {
+    if (n > 1) {
+      if (i > 0) workspace.reset(); // each candidate starts from the same clean slate
+      log(`candidate ${i + 1}/${n} — implementing…`);
+    } else {
+      log("implementing…");
+    }
+    try {
+      const cost = await implementPlan(workspace, ticket, plan, opts, i, n);
+      steps += cost.steps;
+      toolCalls += cost.toolCalls;
+    } catch (error) {
+      // One candidate's model error shouldn't sink the whole tournament.
+      if (n === 1) return errorDecision(error, baseline, steps, toolCalls);
+      log(`candidate ${i + 1} errored, skipping: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    const outcome = await evaluateGate(workspace, ticket, baseline, opts, log);
+    attempts.push(outcome);
+    if (n > 1) {
+      log(`candidate ${i + 1}/${n}: ${describe(outcome)}`);
+      // Cost guard: a clearly-shippable candidate is good enough — stop early.
+      // Tunable via MINION_TOURNAMENT_EARLY (default 0.9; set >1 to always run
+      // the full field, e.g. to compare candidates).
+      if (
+        outcome.status === "approved" &&
+        !outcome.requiresReview &&
+        outcome.confidence.score >= earlyExitFloor()
+      ) {
+        log("a strong candidate cleared the bar — ending the tournament early");
+        break;
+      }
+    }
+  }
+
+  if (attempts.length === 0) {
+    return errorDecision(new Error("every candidate failed to run"), baseline, steps, toolCalls);
+  }
+
+  const winner = selectWinner(attempts);
+  if (n > 1) {
+    const approved = attempts.filter((a) => a.status === "approved").length;
+    log(`tournament: ${attempts.length} ran, ${approved} approved — picked ${describe(winner)}`);
+    // We may have reset past the winner while running later candidates; restore
+    // its change into the working tree so the caller can commit it.
+    workspace.reset();
+    workspace.applyPatch(winner.patch);
+  }
 
   // Learn for next time: remember the test command, file tree, and the files
-  // this run gravitated to, so the next visit to this repo orients faster.
+  // the WINNING change touched, so the next visit to this repo orients faster.
   if (opts.repoKey) {
     const touched = [...hints, ...Object.keys(workspace.changedSourceLines())];
     saveProfile(
@@ -326,14 +357,124 @@ export async function workTicket(
     );
   }
 
+  return { ...winner, steps, toolCalls };
+}
+
+/** Confidence at which a tournament stops early; >1 means never stop early. */
+function earlyExitFloor(): number {
+  const v = Number(process.env.MINION_TOURNAMENT_EARLY);
+  return Number.isFinite(v) && v > 0 ? v : 0.9;
+}
+
+/** How many independent candidate fixes to try, capped for cost. */
+function candidateCount(opts: { candidates?: number }): number {
+  const raw =
+    opts.candidates != null && Number.isFinite(opts.candidates)
+      ? opts.candidates
+      : Number(process.env.MINION_CANDIDATES);
+  const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1;
+  return Math.min(5, Math.max(1, n));
+}
+
+function errorDecision(
+  error: unknown,
+  baseline: TestResult,
+  steps: number,
+  toolCalls: number,
+): Decision {
+  return {
+    status: "error",
+    reason: error instanceof Error ? error.message : String(error),
+    patch: "",
+    baseline,
+    finalTests: baseline,
+    steps,
+    toolCalls,
+    confidence: NO_CONFIDENCE,
+    risk: NO_RISK,
+    requiresReview: false,
+  };
+}
+
+/** One-line summary of a candidate's outcome, for the tournament log. */
+function describe(d: Decision): string {
+  if (d.status === "approved")
+    return `approved · confidence ${d.confidence.score.toFixed(2)} · risk ${d.risk.level}`;
+  return d.status === "declined" ? "declined" : "errored";
+}
+
+/**
+ * Pick the best of the candidates. Approved beats not-approved; among approved,
+ * the order is highest confidence, then lowest blast radius, then smallest diff
+ * (a tidy fix over a sprawling one). Pure, so the tie-breaks are unit-tested. If
+ * none were approved we return a declined one (more informative than an error).
+ */
+export function selectWinner(attempts: Decision[]): Decision {
+  const approved = attempts.filter((a) => a.status === "approved");
+  if (approved.length > 0) {
+    return approved.slice().sort(
+      (a, b) =>
+        b.confidence.score - a.confidence.score ||
+        a.risk.score - b.risk.score ||
+        a.patch.length - b.patch.length,
+    )[0];
+  }
+  return attempts.find((a) => a.status === "declined") ?? attempts[0];
+}
+
+/** Phase 2 for one candidate: carry out the plan with the write-capable tools. */
+async function implementPlan(
+  workspace: Workspace,
+  ticket: Ticket,
+  plan: string,
+  opts: { provider?: string; maxSteps?: number },
+  index: number,
+  total: number,
+): Promise<{ steps: number; toolCalls: number }> {
+  // For a tournament, nudge each attempt to decide independently so the
+  // candidates actually differ rather than converging on one answer.
+  const variation =
+    total > 1
+      ? `\n\nThis is independent attempt ${index + 1} of ${total}. Decide for yourself the cleanest, most minimal correct fix; do not assume how any other attempt approached it.`
+      : "";
+  const result = await generateText({
+    model: getModel(opts.provider),
+    system: implementSystemPrompt(),
+    prompt: `Ticket:\n\n[${ticket.id}] ${ticket.title}\n${ticket.body}\n\nYour plan:\n${plan}\n\nImplement it now.${variation}`,
+    tools: minionTools(workspace),
+    stopWhen: stepCountIs(opts.maxSteps ?? 14),
+  });
+  return {
+    steps: result.steps.length,
+    toolCalls: result.steps.flatMap((s) => s.toolCalls ?? []).length,
+  };
+}
+
+/**
+ * The gate, applied to whatever the workspace currently holds: re-run the tests
+ * as ground truth, reject regressions and no-ops, run the mutation check and the
+ * judge, then score confidence + blast radius. Returns a Decision with
+ * steps/toolCalls left at 0 — the caller folds in the run's cumulative counts.
+ */
+async function evaluateGate(
+  workspace: Workspace,
+  ticket: Ticket,
+  baseline: TestResult,
+  opts: { provider?: string },
+  log: (m: string) => void,
+): Promise<Decision> {
+  const finalTests = workspace.runTests();
+  const patch = workspace.stagedDiff();
+  log(`final: ${finalTests.passed}/${finalTests.total} passing — verifying…`);
+
   const decided = (status: Decision["status"], reason: string): Decision => ({
     status,
     reason,
     patch,
     baseline,
     finalTests,
-    steps,
-    toolCalls,
+    steps: 0,
+    toolCalls: 0,
     confidence: NO_CONFIDENCE,
     risk: NO_RISK,
     requiresReview: false,
@@ -416,14 +557,27 @@ export async function workTicket(
     }`,
   );
 
+  return decidedApproved(patch, baseline, finalTests, verdict.reason, confidence, risk, requiresReview);
+}
+
+/** Build the approved Decision (steps/toolCalls folded in by the caller). */
+function decidedApproved(
+  patch: string,
+  baseline: TestResult,
+  finalTests: TestResult,
+  reason: string,
+  confidence: Confidence,
+  risk: RiskAssessment,
+  requiresReview: boolean,
+): Decision {
   return {
     status: "approved",
-    reason: verdict.reason,
+    reason,
     patch,
     baseline,
     finalTests,
-    steps,
-    toolCalls,
+    steps: 0,
+    toolCalls: 0,
     confidence,
     risk,
     requiresReview,
