@@ -1,7 +1,7 @@
 import { generateText, generateObject, stepCountIs } from "ai";
 import { z } from "zod";
 import path from "node:path";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from "node:fs";
 import { getModel, modelLabel } from "../model";
 import { prepareWorkspace, type TestResult, type Workspace } from "./workspace";
 import { minionTools, minionReadTools } from "./tools";
@@ -10,6 +10,7 @@ import { extractFileHints, resolveHints, buildScopeNote } from "./scope";
 import { loadProfile, saveProfile, mergeProfile } from "./profile";
 import { assessRisk, type RiskAssessment } from "./risk";
 import { confidenceFor, type Confidence } from "./confidence";
+import { readUsage, addUsage, estimateCostUsd, ZERO_USAGE, type TokenUsage } from "./pricing";
 
 /**
  * A minion: an autonomous agent that takes one ticket and tries to close it on
@@ -43,6 +44,12 @@ export interface MinionReceipt {
   baselineTests: { passed: number; total: number };
   finalTests: { ok: boolean; passed: number; failed: number; total: number };
   patch: string;
+  /** Token usage totalled across every model call in the run. */
+  usage?: TokenUsage;
+  /** Estimated USD cost of the run (see pricing.ts — an estimate, not billing). */
+  costUsd?: number;
+  /** Wall-clock duration of the run, in milliseconds. */
+  durationMs?: number;
   /** Calibrated 0..1 confidence and its level, when the change was approved. */
   confidence?: { score: number; level: "high" | "medium" | "low" };
   /** Blast-radius assessment of the diff, when the change was approved. */
@@ -109,15 +116,15 @@ async function judgeChange(
   ticket: Ticket,
   patch: string,
   provider?: string,
-): Promise<{ genuinelyResolves: boolean; reason: string }> {
-  const { object } = await generateObject({
+): Promise<{ genuinelyResolves: boolean; reason: string; usage: TokenUsage }> {
+  const { object, usage } = await generateObject({
     model: getModel(provider),
     schema: verdictSchema,
     system:
       "You review a code change a coding agent made for a ticket. All tests pass. Decide whether the diff is a legitimate, minimal fix that genuinely addresses the ticket — not gaming (e.g. hard-coding a test's expected value, deleting functionality, or sweeping unrelated edits).",
     prompt: `Ticket: ${ticket.title}\n${ticket.body}\n\nDiff:\n${patch || "(no changes)"}\n\nIs this a legitimate, minimal fix for the ticket?`,
   });
-  return object;
+  return { ...object, usage: readUsage(usage) };
 }
 
 /**
@@ -201,6 +208,12 @@ export interface Decision {
    * rather than a ready-to-merge one. This is the auto-ship gate.
    */
   requiresReview: boolean;
+  /** Token usage totalled across the run's model calls. */
+  usage: TokenUsage;
+  /** Estimated USD cost of the run. */
+  costUsd: number;
+  /** Wall-clock duration of the run, in milliseconds. */
+  durationMs: number;
 }
 
 /** Confidence/risk placeholders for the paths that never reach scoring. */
@@ -261,6 +274,18 @@ export async function workTicket(
 
   let steps = 0;
   let toolCalls = 0;
+  const startedAt = Date.now();
+  const meter = { usage: ZERO_USAGE };
+  // Stamp every Decision with the run's accumulated economics on the way out,
+  // so cost/tokens/time are recorded whether it shipped, declined, or errored.
+  const finalize = (d: Decision): Decision => ({
+    ...d,
+    steps,
+    toolCalls,
+    usage: meter.usage,
+    costUsd: estimateCostUsd(meter.usage, modelLabel(opts.provider)),
+    durationMs: Date.now() - startedAt,
+  });
 
   // Phase 1 — orient and plan: understand the code and decide the change BEFORE
   // writing anything. A plan failure is the one thing that ends the run here.
@@ -281,9 +306,10 @@ export async function workTicket(
     plan = planResult.text.trim();
     steps += planResult.steps.length;
     toolCalls += planResult.steps.flatMap((s) => s.toolCalls ?? []).length;
+    meter.usage = addUsage(meter.usage, readUsage(planResult.totalUsage));
     log(`plan ready — ${firstLine(plan)}`);
   } catch (error) {
-    return errorDecision(error, baseline, steps, toolCalls);
+    return finalize(errorDecision(error, baseline, steps, toolCalls));
   }
 
   // Only now, with the codebase understood and a plan in hand, branch off main.
@@ -306,13 +332,14 @@ export async function workTicket(
       const cost = await implementPlan(workspace, ticket, plan, opts, i, n);
       steps += cost.steps;
       toolCalls += cost.toolCalls;
+      meter.usage = addUsage(meter.usage, cost.usage);
     } catch (error) {
       // One candidate's model error shouldn't sink the whole tournament.
-      if (n === 1) return errorDecision(error, baseline, steps, toolCalls);
+      if (n === 1) return finalize(errorDecision(error, baseline, steps, toolCalls));
       log(`candidate ${i + 1} errored, skipping: ${error instanceof Error ? error.message : String(error)}`);
       continue;
     }
-    const outcome = await evaluateGate(workspace, ticket, baseline, opts, log);
+    const outcome = await evaluateGate(workspace, ticket, baseline, opts, log, meter);
     attempts.push(outcome);
     if (n > 1) {
       log(`candidate ${i + 1}/${n}: ${describe(outcome)}`);
@@ -331,7 +358,7 @@ export async function workTicket(
   }
 
   if (attempts.length === 0) {
-    return errorDecision(new Error("every candidate failed to run"), baseline, steps, toolCalls);
+    return finalize(errorDecision(new Error("every candidate failed to run"), baseline, steps, toolCalls));
   }
 
   const winner = selectWinner(attempts);
@@ -357,7 +384,7 @@ export async function workTicket(
     );
   }
 
-  return { ...winner, steps, toolCalls };
+  return finalize(winner);
 }
 
 /** Confidence at which a tournament stops early; >1 means never stop early. */
@@ -393,6 +420,9 @@ function errorDecision(
     confidence: NO_CONFIDENCE,
     risk: NO_RISK,
     requiresReview: false,
+    usage: ZERO_USAGE,
+    costUsd: 0,
+    durationMs: 0,
   };
 }
 
@@ -430,7 +460,7 @@ async function implementPlan(
   opts: { provider?: string; maxSteps?: number },
   index: number,
   total: number,
-): Promise<{ steps: number; toolCalls: number }> {
+): Promise<{ steps: number; toolCalls: number; usage: TokenUsage }> {
   // For a tournament, nudge each attempt to decide independently so the
   // candidates actually differ rather than converging on one answer.
   const variation =
@@ -447,6 +477,7 @@ async function implementPlan(
   return {
     steps: result.steps.length,
     toolCalls: result.steps.flatMap((s) => s.toolCalls ?? []).length,
+    usage: readUsage(result.totalUsage),
   };
 }
 
@@ -462,6 +493,7 @@ async function evaluateGate(
   baseline: TestResult,
   opts: { provider?: string },
   log: (m: string) => void,
+  meter: { usage: TokenUsage },
 ): Promise<Decision> {
   const finalTests = workspace.runTests();
   const patch = workspace.stagedDiff();
@@ -478,6 +510,9 @@ async function evaluateGate(
     confidence: NO_CONFIDENCE,
     risk: NO_RISK,
     requiresReview: false,
+    usage: ZERO_USAGE,
+    costUsd: 0,
+    durationMs: 0,
   });
 
   // Gate 1: no regressions, and real progress. With a per-test map we reason
@@ -528,6 +563,7 @@ async function evaluateGate(
 
   // Gate 2: the change must be a legitimate, minimal fix, not gamed.
   const verdict = await judgeChange(ticket, patch, opts.provider);
+  meter.usage = addUsage(meter.usage, verdict.usage);
   if (!verdict.genuinelyResolves) {
     return decided(
       "declined",
@@ -581,6 +617,9 @@ function decidedApproved(
     confidence,
     risk,
     requiresReview,
+    usage: ZERO_USAGE,
+    costUsd: 0,
+    durationMs: 0,
   };
 }
 
@@ -606,6 +645,9 @@ export async function runMinion(
     baselineTests: { passed: decision.baseline.passed, total: decision.baseline.total },
     finalTests: testToReceipt(decision.finalTests),
     patch: decision.patch,
+    usage: decision.usage,
+    costUsd: decision.costUsd,
+    durationMs: decision.durationMs,
     ...decisionScores(decision),
   });
 }
@@ -637,4 +679,12 @@ export function writeReceipt(receipt: MinionReceipt): MinionReceipt {
     JSON.stringify(receipt, null, 2) + "\n",
   );
   return receipt;
+}
+
+/** Load every run receipt on disk (for `forge costs` and other roll-ups). */
+export function loadReceipts(): MinionReceipt[] {
+  if (!existsSync(RECEIPTS_DIR)) return [];
+  return readdirSync(RECEIPTS_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => JSON.parse(readFileSync(path.join(RECEIPTS_DIR, f), "utf8")) as MinionReceipt);
 }

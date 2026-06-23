@@ -3,6 +3,11 @@ import assert from "node:assert/strict";
 import { selectWinner, type Decision } from "./minion";
 
 const baseTests = { ok: true, passed: 1, failed: 0, total: 1, output: "", tests: {}, perTest: false };
+const baseEconomics = {
+  usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+  costUsd: 0,
+  durationMs: 0,
+};
 
 /** A minimal approved Decision with the fields selectWinner ranks on. */
 function approved(opts: {
@@ -22,6 +27,7 @@ function approved(opts: {
     confidence: { score: opts.confidence, level: "high" },
     risk: { level: "low", score: opts.riskScore ?? 0, factors: [], filesChanged: 1, linesAdded: 1, linesRemoved: 0 },
     requiresReview: false,
+    ...baseEconomics,
   };
 }
 
@@ -37,6 +43,7 @@ function declined(reason = "no"): Decision {
     confidence: { score: 0, level: "low" },
     risk: { level: "low", score: 0, factors: [], filesChanged: 0, linesAdded: 0, linesRemoved: 0 },
     requiresReview: false,
+    ...baseEconomics,
   };
 }
 

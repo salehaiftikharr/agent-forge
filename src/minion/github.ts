@@ -129,6 +129,9 @@ export async function openPullRequest(
     baselineTests: { passed: decision.baseline.passed, total: decision.baseline.total },
     finalTests: testToReceipt(decision.finalTests),
     patch: decision.patch,
+    usage: decision.usage,
+    costUsd: decision.costUsd,
+    durationMs: decision.durationMs,
     ...decisionScores(decision),
   };
 

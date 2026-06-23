@@ -14,6 +14,7 @@
 - 🧪 **Reproduction mode** — a separate spec-author minion writes *only* a failing test for an untested bug, keeping the test-writer and the fixer apart.
 - 🧠 **Repo-agnostic & self-sharpening** — auto-detects the test runner (Vitest / Jest / Mocha / Go / node:test), scopes from the ticket's stack trace, and remembers each repo between runs.
 - 💬 **Front doors** — run it from the CLI, or just chat with a Slack bot: *"show me the issues in ENG"* → *"work on the login bug."*
+- 💸 **Knows what it costs** — every run records its tokens, an estimated dollar cost, and wall-clock time; `forge costs` rolls them into ship rate and **cost per shipped PR**, the number an operator actually budgets on.
 - 🧾 **Auditable** — every run leaves a receipt, and `forge corpus` checks what humans did with each PR so "zero unsafe ships" stays honest over time.
 
 _New here? The two sections that follow — **Forge** then **Minions** — are the whole story; everything below is detail._
@@ -164,6 +165,7 @@ forge eval                    # measure the gate on a labeled set (0 unsafe ship
 forge pr <owner/repo> <n>     # fix a real GitHub issue and open a real pull request
 forge spec <owner/repo> <n>   # write a failing reproduction test for an issue (no fix), open it for review
 forge corpus                  # check what humans did with shipped PRs — defend zero-unsafe-ships over time
+forge costs                   # token, cost, and time economics across all runs (cost per shipped PR)
 ```
 
 ### Reproduction-only mode: a spec-author minion
@@ -296,8 +298,10 @@ judge are the same pieces `build`/`refine` use. New in `src/minion/`:
 engine + diff parsing), `spec.ts` (the spec-author / reproduction mode),
 `scope.ts` (ticket/stack-trace scoping), `profile.ts` (the per-repo learning
 cache), `corpus.ts` (the PR-outcome corpus), `risk.ts` (blast-radius scoring),
-`confidence.ts` (the calibrated confidence score), `tools.ts` (the write-capable
-tools), `minion.ts` (the loop, gates, and best-of-N tournament).
+`confidence.ts` (the calibrated confidence score), `pricing.ts` (token-cost
+estimation), `economics.ts` (the cost/ship-rate roll-up behind `forge costs`),
+`tools.ts` (the write-capable tools), `minion.ts` (the loop, gates, and
+best-of-N tournament).
 
 ## Why this shape
 
@@ -406,6 +410,7 @@ A built example agent and its receipt live in
 - ✅ Spec-author / reproduction mode — failing tests for untested bugs, with separation of powers.
 - ✅ Repo-agnostic test-runner detection, ticket/stack-trace scoping, and a per-repo learning profile.
 - ✅ Slack + Linear front door, and an outcome corpus that defends the safety record over time.
+- ✅ Run economics — per-run tokens, estimated cost, and time, with a cost-per-shipped-PR roll-up (`forge costs`).
 
 **Next, in order of leverage**
 

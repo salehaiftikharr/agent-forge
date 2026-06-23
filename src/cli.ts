@@ -22,7 +22,8 @@ import { buildAgent } from "./builder";
 import { runAgent } from "./runtime";
 import { testAgent } from "./judge";
 import { refineAgent } from "./refine";
-import { runMinion, type Ticket, type MinionReceipt } from "./minion/minion";
+import { runMinion, loadReceipts, type Ticket, type MinionReceipt } from "./minion/minion";
+import { summarizeRuns } from "./minion/economics";
 import { runFleet } from "./minion/fleet";
 import { evaluateMinions } from "./minion/evaluate";
 import { runCorpus } from "./minion/corpus";
@@ -351,6 +352,26 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "costs": {
+      const receipts = loadReceipts();
+      if (!receipts.length) {
+        console.log("No run receipts yet. Run a minion first: forge minion <TICKET-ID>");
+        break;
+      }
+      const s = summarizeRuns(receipts);
+      const usd = (n: number | null) => (n == null ? "n/a" : `$${n.toFixed(4)}`);
+      console.log("Minion run economics (estimated):\n");
+      console.log(`  Runs:              ${s.runs}  (${s.shipped} shipped · ${s.declined} declined · ${s.errored} errored)`);
+      console.log(`  Ship rate:         ${Math.round(s.shipRate * 100)}%`);
+      console.log(`  Total tokens:      ${s.totalTokens.toLocaleString()}`);
+      console.log(`  Total cost:        ${usd(s.totalCostUsd)}`);
+      console.log(`  Avg cost / run:    ${usd(s.avgCostPerRunUsd)}`);
+      console.log(`  Cost / shipped PR: ${usd(s.costPerShippedUsd)}`);
+      console.log(`  Avg run time:      ${(s.avgDurationMs / 1000).toFixed(1)}s`);
+      console.log("\n  Estimates for budgeting (see src/minion/pricing.ts), not billing.");
+      break;
+    }
+
     case "run": {
       const [name, ...inputParts] = rest;
       const input = inputParts.join(" ").trim();
@@ -430,6 +451,7 @@ async function main(): Promise<void> {
           "  forge fleet [--once]          run minions continuously, picking up new tickets",
           "                                  (--interval <sec> sets the poll cadence)",
           "  forge eval                    measure the gate: ships the right work, never the wrong",
+          "  forge costs                   token, cost, and time economics across all runs",
           "  forge pr <owner/repo> <n>     fix a real GitHub issue and open a real pull request",
           "  forge linear <ENG-123> <repo> fix a Linear issue and open a PR (comments back on Linear)",
           "",
