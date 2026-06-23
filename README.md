@@ -9,6 +9,7 @@
 - 🏭 **Forge** generates an agent *and its own acceptance tests*, then tests → repairs → re-tests until it passes.
 - 🤖 **Minions** fix a ticket on a sandbox clone and open a **verified** pull request — only when a failing test goes green with no regressions. **Zero unsafe ships** on a labeled eval.
 - 🔒 **A gate that's hard to game** — the harness re-runs the tests (never the model's word), minions can't edit tests, and **mutation testing** + flaky-guarding sit under an independent LLM judge.
+- 🥊 **Adversarial review (optional)** — turn on a panel of independent skeptics, each given a different lens (wrong edge cases, gamed, hidden regressions), that try to *refute* a fix; it ships only if it beats a majority. Several reviewers hunting different failures catch what one approver misses.
 - 🎯 **Confidence + blast-radius scoring** — a change that clears every gate is also *scored*: a calibrated 0–1 confidence (from mutation catch rate, tests flipped, the judge, and how much it touches) decides whether it ships ready-to-merge or opens as a **draft** for a human. Knowing how sure it is, is a feature.
 - 🏆 **Best-of-N tournament** — optionally generate several independent candidate fixes from the same plan, run each through the *full* gate, and ship only the strongest (highest confidence, then smallest blast radius and diff). More shots on goal, same bar.
 - 🧪 **Reproduction mode** — a separate spec-author minion writes *only* a failing test for an untested bug, keeping the test-writer and the fixer apart.
@@ -235,6 +236,7 @@ ticket → study the whole codebase (read-only) → write a plan
        → gate: a failing test went green AND nothing regressed?
        → mutation check: mangle the fix's own lines — does the test catch it?
        → judge: is the diff a legitimate, minimal fix (not gamed)?
+       → adversarial panel (optional): N skeptics try to refute it — survives a majority?
        → score: confidence (0–1) + blast radius → ship ready, or open a DRAFT
        → SHIP (human commit + PR) + receipt, or DECLINE + receipt
 
@@ -249,6 +251,16 @@ and re-runs — if the now-green test survives every mutation, the test is not
 actually pinning the fix, so the minion declines as likely gamed. And
 **flaky-test guarding** (`MINION_TEST_RUNS`) runs the suite N times and trusts a
 test only if it passes every run, so a flaky green never earns a ship.
+
+**Adversarial review, on demand.** The LLM judge is one reviewer asking "is this
+good?" Set `MINION_VERIFIERS=3` and a *panel* of independent skeptics weighs in
+instead, each told to REFUTE the change through a different lens — find a wrong
+edge case, decide whether it only satisfies the test superficially, or catch a
+regression the ticket never mentioned. The change ships only if it beats a
+majority; a tie errs toward rejection. Several reviewers hunting *different*
+failure modes catch more than one approver or several reviewers asking the same
+question. It is off by default because it spends extra tokens (now visible in
+`forge costs`), and on for the runs where you want maximum rigor.
 
 **Knows how sure it is.** Passing every gate proves the fix is *correct*; it
 says nothing about how risky shipping it unattended is. So an approved change is
@@ -298,10 +310,10 @@ judge are the same pieces `build`/`refine` use. New in `src/minion/`:
 engine + diff parsing), `spec.ts` (the spec-author / reproduction mode),
 `scope.ts` (ticket/stack-trace scoping), `profile.ts` (the per-repo learning
 cache), `corpus.ts` (the PR-outcome corpus), `risk.ts` (blast-radius scoring),
-`confidence.ts` (the calibrated confidence score), `pricing.ts` (token-cost
-estimation), `economics.ts` (the cost/ship-rate roll-up behind `forge costs`),
-`tools.ts` (the write-capable tools), `minion.ts` (the loop, gates, and
-best-of-N tournament).
+`confidence.ts` (the calibrated confidence score), `verify.ts` (the optional
+adversarial review panel), `pricing.ts` (token-cost estimation), `economics.ts`
+(the cost/ship-rate roll-up behind `forge costs`), `tools.ts` (the write-capable
+tools), `minion.ts` (the loop, gates, and best-of-N tournament).
 
 ## Why this shape
 
@@ -405,6 +417,7 @@ A built example agent and its receipt live in
 
 - ✅ Autonomous, verified pull requests on a sandbox *and* real GitHub repos — zero unsafe ships on a labeled eval.
 - ✅ A gate that's hard to game — mutation testing + flaky-test guarding beneath the LLM judge.
+- ✅ Adversarial verification panel — independent skeptics with distinct lenses, majority vote to refute (opt-in via `MINION_VERIFIERS`).
 - ✅ Confidence + blast-radius scoring — approved changes ship ready-to-merge or open as a draft, by a tunable threshold.
 - ✅ Best-of-N tournament — independent candidate fixes compete through the full gate; only the strongest ships.
 - ✅ Spec-author / reproduction mode — failing tests for untested bugs, with separation of powers.
@@ -419,8 +432,8 @@ A built example agent and its receipt live in
 - **Hosted, sandboxed runs.** Run minions in an ephemeral container on a server
   (token-based `gh` auth) for always-on operation that isolates untrusted
   repo-test execution.
-- **Judge panel.** Replace the single judge with a panel of independent judges
-  and a majority vote, so the receipts are trustworthy, not decorative.
 - **A live web surface.** Watch the build → test → repair loop stream in a
   browser, with the receipt rendered at the end.
-- **Cost/latency tracking** per build/run/repair, to make the economics visible.
+- **Respond to code review.** A reviewer comments on a minion's PR; the minion
+  reads it, revises through the same gates, and pushes an update — a collaborator,
+  not a one-shot.

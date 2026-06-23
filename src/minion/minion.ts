@@ -11,6 +11,7 @@ import { loadProfile, saveProfile, mergeProfile } from "./profile";
 import { assessRisk, type RiskAssessment } from "./risk";
 import { confidenceFor, type Confidence } from "./confidence";
 import { readUsage, addUsage, estimateCostUsd, ZERO_USAGE, type TokenUsage } from "./pricing";
+import { redTeam, survivesPanel, panelSize } from "./verify";
 
 /**
  * A minion: an autonomous agent that takes one ticket and tries to close it on
@@ -569,6 +570,25 @@ async function evaluateGate(
       "declined",
       `Tests pass, but the change was rejected on review: ${verdict.reason}`,
     );
+  }
+
+  // Gate 2.5 (optional): an adversarial panel. Where the judge asks "is this
+  // good?", a panel of independent skeptics each tries to REFUTE the change
+  // through a different lens; it survives only if it beats a majority. Opt-in
+  // via MINION_VERIFIERS, since it spends extra tokens.
+  const verifiers = panelSize();
+  if (verifiers > 0) {
+    log(`adversarial review: ${verifiers} independent verifiers…`);
+    const panel = await redTeam(ticket, patch, opts.provider, verifiers);
+    meter.usage = addUsage(meter.usage, panel.usage);
+    const refutals = panel.verdicts.filter((v) => v.refuted);
+    log(`adversarial review: ${refutals.length}/${panel.verdicts.length} voted to refute`);
+    if (!survivesPanel(panel.verdicts)) {
+      return decided(
+        "declined",
+        `Adversarial review refuted the change (${refutals.length}/${panel.verdicts.length}): ${refutals[0]?.reason ?? "majority found it unsound"}`,
+      );
+    }
   }
 
   // Approved — every gate passed. Now score HOW the change should ship: assess
