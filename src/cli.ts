@@ -30,6 +30,8 @@ import { runCorpus } from "./minion/corpus";
 import { runMinionPR, fetchIssue } from "./minion/github";
 import { openSpecPR } from "./minion/spec";
 import { runMinionForLinear } from "./linear/dispatch";
+import { Tracer, setTracer, loadTrace, loadLatestTrace } from "./trace";
+import { evaluateTrajectories, type TrajectoryCase } from "./eval/trajectory";
 import {
   saveSpec,
   loadSpec,
@@ -42,6 +44,20 @@ import {
 function loadTickets(): Ticket[] {
   const file = path.join(process.cwd(), "sandbox", "tickets.json");
   return JSON.parse(readFileSync(file, "utf8")) as Ticket[];
+}
+
+function loadBuildTasks(): TrajectoryCase[] {
+  const file = path.join(process.cwd(), "evals", "build-tasks.json");
+  return JSON.parse(readFileSync(file, "utf8")) as TrajectoryCase[];
+}
+
+/** Print a one-line trace footer after a traced command. */
+function printTraceFooter(tracer: Tracer): void {
+  const s = tracer.summary();
+  console.log(
+    `\n⟐ trace: ${s.spans} model call(s) · ${(s.totalMs / 1000).toFixed(1)}s · ${s.totalTokens.toLocaleString()} tokens` +
+      `${s.failures ? ` · ${s.failures} failed` : ""} → .forge-traces/${s.runId}.jsonl`,
+  );
 }
 
 function printMinionReceipt(r: MinionReceipt): void {
@@ -115,20 +131,55 @@ async function main(): Promise<void> {
     case "build": {
       const description = rest.join(" ").trim();
       if (!description) fail('Usage: forge build "<what the agent should do>"');
-      console.log(`Designing an agent with ${modelLabel(provider)}…\n`);
-      const { spec, droppedTools } = await buildAgent(description, { provider });
-      const file = saveSpec(spec);
-      console.log(`✓ Built "${spec.name}"`);
-      console.log(`  ${spec.description}`);
-      console.log(`  tools: ${spec.tools.join(", ") || "(none)"}`);
-      console.log(`  tests: ${spec.testCases.length}`);
-      if (droppedTools.length) {
-        console.log(`  ⚠ dropped unknown tools: ${droppedTools.join(", ")}`);
-      }
-      console.log(`  saved: ${file}`);
+      const tracer = new Tracer(`build-${Date.now()}`);
+      setTracer(tracer);
+      try {
+        console.log(`Designing an agent with ${modelLabel(provider)}…\n`);
+        const { spec, droppedTools } = await buildAgent(description, { provider });
+        const file = saveSpec(spec);
+        console.log(`✓ Built "${spec.name}"`);
+        console.log(`  ${spec.description}`);
+        console.log(`  tools: ${spec.tools.join(", ") || "(none)"}`);
+        console.log(`  tests: ${spec.testCases.length}`);
+        if (droppedTools.length) {
+          console.log(`  ⚠ dropped unknown tools: ${droppedTools.join(", ")}`);
+        }
+        console.log(`  saved: ${file}`);
 
-      if (repair) {
-        console.log(`\nProving it works (test → repair → test)…\n`);
+        if (repair) {
+          console.log(`\nProving it works (test → repair → test)…\n`);
+          const result = await refineAgent(spec, {
+            provider,
+            maxRounds: rounds,
+            onProgress: (m) => console.log(`  ${m}`),
+          });
+          saveSpec(result.spec);
+          saveReceipt(result.receipt);
+          console.log("");
+          printReceipt(result.receipt);
+        } else {
+          console.log(
+            `\nNext: forge refine ${spec.name}   (test it and auto-fix failures)`,
+          );
+        }
+      } finally {
+        setTracer(null);
+        tracer.persist();
+        printTraceFooter(tracer);
+      }
+      break;
+    }
+
+    case "refine": {
+      const [name] = rest;
+      if (!name) fail("Usage: forge refine <name> [--rounds N]");
+      const spec = loadSpec(name);
+      const tracer = new Tracer(`refine-${name}-${Date.now()}`);
+      setTracer(tracer);
+      try {
+        console.log(
+          `Refining "${name}" with ${modelLabel(provider)} — the build is fixed; iterating the agent to a passing bar…\n`,
+        );
         const result = await refineAgent(spec, {
           provider,
           maxRounds: rounds,
@@ -138,31 +189,12 @@ async function main(): Promise<void> {
         saveReceipt(result.receipt);
         console.log("");
         printReceipt(result.receipt);
-      } else {
-        console.log(
-          `\nNext: forge refine ${spec.name}   (test it and auto-fix failures)`,
-        );
+        process.exitCode = result.receipt.status === "passing" ? 0 : 1;
+      } finally {
+        setTracer(null);
+        tracer.persist();
+        printTraceFooter(tracer);
       }
-      break;
-    }
-
-    case "refine": {
-      const [name] = rest;
-      if (!name) fail("Usage: forge refine <name> [--rounds N]");
-      const spec = loadSpec(name);
-      console.log(
-        `Refining "${name}" with ${modelLabel(provider)} — the build is fixed; iterating the agent to a passing bar…\n`,
-      );
-      const result = await refineAgent(spec, {
-        provider,
-        maxRounds: rounds,
-        onProgress: (m) => console.log(`  ${m}`),
-      });
-      saveSpec(result.spec);
-      saveReceipt(result.receipt);
-      console.log("");
-      printReceipt(result.receipt);
-      process.exitCode = result.receipt.status === "passing" ? 0 : 1;
       break;
     }
 
@@ -412,6 +444,54 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "trace": {
+      const [id] = rest;
+      const trace = id ? loadTrace(id) : loadLatestTrace();
+      if (!trace) {
+        console.log("No traces yet. Run `forge build --repair` or `forge refine` first.");
+        break;
+      }
+      const s = trace.summary;
+      console.log(
+        `Trace ${s.runId} — ${s.spans} model call(s) · ${(s.totalMs / 1000).toFixed(1)}s · ${s.totalTokens.toLocaleString()} tokens · ${s.failures} failure(s)\n`,
+      );
+      for (const [type, t] of Object.entries(s.byType)) {
+        console.log(
+          `  ${type.padEnd(8)} ${String(t.count).padStart(3)} call(s) · ${(t.ms / 1000).toFixed(1)}s · ${t.tokens.toLocaleString()} tok${t.failures ? ` · ${t.failures} failed` : ""}`,
+        );
+      }
+      break;
+    }
+
+    case "eval:trajectory": {
+      console.log(
+        `Trajectory eval with ${modelLabel(provider)} — does the build → repair loop converge, recover, and at what cost?\n`,
+      );
+      const report = await evaluateTrajectories(loadBuildTasks(), {
+        provider,
+        maxRounds: rounds,
+        onLog: (m) => console.log(`  ${m}`),
+      });
+      console.log("");
+      for (const r of report.results) {
+        const mark = r.error ? "✗ error" : r.converged ? "✓" : "⚠";
+        const note = r.error
+          ? r.error
+          : `${r.finalPassed}/${r.finalTotal} · ${r.rounds} repair round(s)${r.recovered ? " · recovered" : ""}`;
+        console.log(`${mark.padEnd(8)} ${r.id.padEnd(18)} ${note}`);
+      }
+      const sum = report.summary;
+      console.log(
+        `\nConverged: ${sum.converged}/${sum.total} (${(sum.convergenceRate * 100).toFixed(0)}%) · ` +
+          `Recovered: ${sum.recovered}/${sum.startedFailing} · ` +
+          `Avg repair rounds: ${sum.avgRounds.toFixed(1)}`,
+      );
+      console.log(
+        `Total: ${sum.totalTokens.toLocaleString()} tokens · ${(sum.totalMs / 1000).toFixed(1)}s`,
+      );
+      break;
+    }
+
     case "list": {
       const specs = listSpecs();
       if (!specs.length) {
@@ -443,6 +523,7 @@ async function main(): Promise<void> {
           '  forge run <name> "<input>"    run a saved agent',
           "  forge test <name>             run its auto-generated tests",
           "  forge receipt <name>          print the build → test → repair record",
+          "  forge trace [id]              show the trace of a run (latency, tokens, failures)",
           "  forge list                    list built agents",
           "  forge show <name>             print an agent's spec",
           "",
@@ -451,6 +532,7 @@ async function main(): Promise<void> {
           "  forge fleet [--once]          run minions continuously, picking up new tickets",
           "                                  (--interval <sec> sets the poll cadence)",
           "  forge eval                    measure the gate: ships the right work, never the wrong",
+          "  forge eval:trajectory         measure the build → repair loop: convergence, recovery, cost",
           "  forge costs                   token, cost, and time economics across all runs",
           "  forge pr <owner/repo> <n>     fix a real GitHub issue and open a real pull request",
           "  forge linear <ENG-123> <repo> fix a Linear issue and open a PR (comments back on Linear)",

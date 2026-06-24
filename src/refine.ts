@@ -1,6 +1,7 @@
 import { testAgent, type CaseResult } from "./judge";
 import { repairAgent } from "./repair";
 import { modelLabel } from "./model";
+import { recordLessons, keywords } from "./memory";
 import type { AgentSpec, Receipt, ReceiptRound } from "./spec";
 
 /**
@@ -49,6 +50,7 @@ export async function refineAgent(
   while (report.passed < report.total && round < maxRounds) {
     round++;
     const failures = report.cases.filter((c) => !c.pass);
+    const passedBefore = report.passed;
     log(
       `${report.passed}/${report.total} passing — repairing (round ${round}/${maxRounds})…`,
     );
@@ -62,6 +64,23 @@ export async function refineAgent(
       total: report.total,
       failingInputs: report.cases.filter((c) => !c.pass).map((c) => c.input),
     });
+
+    // Persistent memory: if this repair actually moved the needle, remember the
+    // fix so future builds and repairs of similar tasks can reuse it.
+    if (report.passed > passedBefore) {
+      const failingInput = failures.map((f) => f.input).join("; ");
+      recordLessons([
+        {
+          at: new Date().toISOString(),
+          agent: current.name,
+          failingInput,
+          fix: repaired.changeSummary,
+          keywords: keywords(
+            `${current.name} ${failingInput} ${failures.map((f) => f.expectation).join(" ")}`,
+          ),
+        },
+      ]);
+    }
   }
 
   const receipt: Receipt = {

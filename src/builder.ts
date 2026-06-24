@@ -2,6 +2,8 @@ import { generateObject } from "ai";
 import { getModel } from "./model";
 import { agentSpecSchema, type AgentSpec } from "./spec";
 import { toolCatalog, toolNames } from "./tools/registry";
+import { tracedGenerate } from "./trace";
+import { lessonsPrompt } from "./memory";
 
 /**
  * The builder: a plain-English description in, a validated AgentSpec out. This
@@ -33,12 +35,15 @@ export async function buildAgent(
   description: string,
   opts: { provider?: string } = {},
 ): Promise<BuildResult> {
-  const { object } = await generateObject({
-    model: getModel(opts.provider),
-    schema: agentSpecSchema,
-    system: builderSystem(),
-    prompt: description,
-  });
+  const { object } = await tracedGenerate("build", "build", () =>
+    generateObject({
+      model: getModel(opts.provider),
+      schema: agentSpecSchema,
+      // Ground the build in lessons learned from past repairs, when relevant.
+      system: builderSystem() + lessonsPrompt(description),
+      prompt: description,
+    }),
+  );
 
   // Defense in depth: even with the catalog in the prompt, drop any tool the
   // model named that doesn't exist, so a built spec is always runnable.

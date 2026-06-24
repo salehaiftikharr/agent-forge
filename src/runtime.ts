@@ -1,6 +1,7 @@
 import { generateText, stepCountIs } from "ai";
 import { getModel } from "./model";
 import { resolveTools } from "./tools/registry";
+import { tracedGenerate } from "./trace";
 import type { AgentSpec } from "./spec";
 
 export interface ToolCallTrace {
@@ -27,13 +28,15 @@ export async function runAgent(
 ): Promise<RunResult> {
   const { tools } = resolveTools(spec.tools);
 
-  const result = await generateText({
-    model: getModel(opts.provider),
-    system: spec.systemPrompt,
-    prompt: input,
-    tools,
-    stopWhen: stepCountIs(spec.maxSteps),
-  });
+  const result = await tracedGenerate(`run:${spec.name}`, "run", () =>
+    generateText({
+      model: getModel(opts.provider),
+      system: spec.systemPrompt,
+      prompt: input,
+      tools,
+      stopWhen: stepCountIs(spec.maxSteps),
+    }),
+  );
 
   const toolCalls: ToolCallTrace[] = result.steps.flatMap((step) =>
     (step.toolCalls ?? []).map((call) => ({

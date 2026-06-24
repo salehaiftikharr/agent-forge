@@ -137,6 +137,37 @@ real counterexample) — and turns any rejection into a new labeled eval case. R
 it on a cron and "zero unsafe ships" becomes a number you defend continuously,
 not once.
 
+### Observability, trajectory evals, and memory
+
+Reliability needs more than a pass/fail at the end — you need to see *how* a run
+behaved, evaluate the *path* it took, and carry forward what it learned.
+
+- **Tracing.** Every model call in the build → run → judge → repair loop flows
+  through one instrumented wrapper, so a run records a trace: per-step type,
+  latency, token usage, tool-call steps, and failures. `forge trace` prints the
+  rollup for the last run (or any saved run); traces persist to `.forge-traces/`.
+
+  ```
+  $ forge trace
+  Trace build-… — 6 model call(s) · 14.2s · 38,940 tokens · 0 failure(s)
+    build      1 call(s) · 3.1s · 9,210 tok
+    run        3 call(s) · 7.4s · 18,300 tok
+    judge      2 call(s) · 3.7s · 11,430 tok
+  ```
+
+- **Trajectory-level evals.** `forge eval` grades the final decision; `forge
+  eval:trajectory` grades the *trajectory* — it runs a set of build tasks
+  through the full self-repair loop and reports what single-output metrics miss:
+  did it converge, did it recover from a failing first build, how many repair
+  rounds it took, and the token/latency cost. Two agents can both end up passing;
+  the one that needed three repair rounds is the more fragile trajectory.
+
+- **Persistent memory.** When a repair fixes a failing test, that fix is a lesson
+  ("on input X, the change that worked was Y"). Forge appends it to
+  `.forge-memory/` and recalls the relevant lessons (keyword overlap, recency
+  tie-break) on the next build or repair, so the system carries forward what it
+  learned instead of rediscovering the same fixes every run.
+
 ### Real pull requests, not just a sandbox
 
 `forge pr <owner/repo> <issue>` runs the *same* minion and the *same* gates on

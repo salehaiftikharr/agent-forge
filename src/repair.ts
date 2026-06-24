@@ -3,6 +3,8 @@ import { z } from "zod";
 import { getModel } from "./model";
 import { agentSpecSchema, type AgentSpec } from "./spec";
 import { toolCatalog, toolNames } from "./tools/registry";
+import { tracedGenerate } from "./trace";
+import { lessonsPrompt } from "./memory";
 import type { CaseResult } from "./judge";
 
 /**
@@ -50,12 +52,16 @@ export async function repairAgent(
     )
     .join("\n\n");
 
-  const { object } = await generateObject({
-    model: getModel(opts.provider),
-    schema: repairSchema,
-    system: repairSystem(),
-    prompt: `Current AgentSpec:\n${JSON.stringify(spec, null, 2)}\n\nFailing cases:\n${failureBlock}\n\nRevise the spec so these pass while keeping the rest intact.`,
-  });
+  const failureQuery = failures.map((f) => `${f.input} ${f.reason}`).join(" ");
+  const { object } = await tracedGenerate("repair", "repair", () =>
+    generateObject({
+      model: getModel(opts.provider),
+      schema: repairSchema,
+      // Recall how similar failures were fixed before, when relevant.
+      system: repairSystem() + lessonsPrompt(failureQuery),
+      prompt: `Current AgentSpec:\n${JSON.stringify(spec, null, 2)}\n\nFailing cases:\n${failureBlock}\n\nRevise the spec so these pass while keeping the rest intact.`,
+    }),
+  );
 
   const droppedTools = object.spec.tools.filter((t) => !toolNames.includes(t));
   const revised: AgentSpec = {

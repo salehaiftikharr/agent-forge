@@ -1,0 +1,22 @@
+[
+  {
+    "id": "weather-summary",
+    "description": "Build an agent that takes a city name and reports its current weather in one friendly sentence, and refuses if the city is not real."
+  },
+  {
+    "id": "bill-splitter",
+    "description": "Build an agent that splits a restaurant bill evenly across a number of people, including a tip percentage, and returns the per-person amount."
+  },
+  {
+    "id": "temp-converter",
+    "description": "Build an agent that converts a temperature between Celsius and Fahrenheit, and declines requests it cannot convert."
+  },
+  {
+    "id": "tip-calculator",
+    "description": "Build an agent that calculates the tip on a bill given a percentage and returns both the tip and the total."
+  },
+  {
+    "id": "cautious-answerer",
+    "description": "Build an agent that answers simple factual questions it can verify with its tools, and explicitly declines to guess when it cannot."
+  }
+]

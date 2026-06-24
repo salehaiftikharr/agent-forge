@@ -18,3 +18,7 @@ node_modules
 /.minion-profiles/
 # the outcome corpus is regenerated from receipts
 /minion-corpus.json
+
+# observability traces and persistent memory are per-run artifacts
+/.forge-traces/
+/.forge-memory/

@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { getModel } from "./model";
 import { runAgent } from "./runtime";
+import { tracedGenerate } from "./trace";
 import type { AgentSpec } from "./spec";
 
 /**
@@ -40,13 +41,15 @@ async function judge(
   output: string,
   provider?: string,
 ): Promise<{ pass: boolean; reason: string }> {
-  const { object } = await generateObject({
-    model: getModel(provider),
-    schema: verdictSchema,
-    system:
-      "You are a strict grader. Decide whether an agent's output satisfies the stated expectation. Judge only what the expectation asks for. If the output is plausible but does not actually meet the bar (wrong value, hedged guess, ignored the refusal it should have made), fail it.",
-    prompt: `Task input:\n${input}\n\nExpectation (the bar to clear):\n${expectation}\n\nAgent output:\n${output}\n\nDoes the output satisfy the expectation?`,
-  });
+  const { object } = await tracedGenerate("judge", "judge", () =>
+    generateObject({
+      model: getModel(provider),
+      schema: verdictSchema,
+      system:
+        "You are a strict grader. Decide whether an agent's output satisfies the stated expectation. Judge only what the expectation asks for. If the output is plausible but does not actually meet the bar (wrong value, hedged guess, ignored the refusal it should have made), fail it.",
+      prompt: `Task input:\n${input}\n\nExpectation (the bar to clear):\n${expectation}\n\nAgent output:\n${output}\n\nDoes the output satisfy the expectation?`,
+    }),
+  );
   return object;
 }
 
