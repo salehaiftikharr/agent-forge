@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent Forge, Minions Console</title>
+<meta name="description" content="A replay of real autonomous minion runs: fix a ticket on a sandboxed clone, verify, and open a pull request only when it is safe, otherwise decline." />
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #11151f;
+    --panel-2: #0e121b;
+    --border: #1f2836;
+    --text: #e6ebf2;
+    --muted: #8a97ab;
+    --faint: #5b6676;
+    --brand: #7c9cff;
+    --green: #46d19e;
+    --amber: #f2b45a;
+    --red: #ff6b7a;
+    --blue: #63b3ff;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: radial-gradient(80% 55% at 50% -10%, #131a2b 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 40px 20px 64px; }
+
+  header .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 40px; height: 40px; border-radius: 11px; flex: none;
+    background: linear-gradient(160deg, #8ea6ff, #5b7cff);
+    display: grid; place-items: center; color: #0b0e14; font-weight: 800; font-size: 20px;
+    box-shadow: 0 6px 20px rgba(99, 124, 255, 0.35);
+  }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .tag {
+    font-family: var(--mono); font-size: 11px; color: var(--brand);
+    border: 1px solid #2b3550; background: #141b2c; padding: 3px 8px; border-radius: 999px;
+  }
+  .lede { color: var(--muted); max-width: 660px; margin: 16px 0 4px; font-size: 15px; }
+  .lede b { color: var(--text); font-weight: 600; }
+  .links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 13px; }
+  .links a { color: var(--brand); text-decoration: none; }
+  .links a:hover { text-decoration: underline; }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 16px; }
+  .tab {
+    font-family: var(--sans); font-size: 13.5px; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 9px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .tab:hover { color: var(--text); border-color: #33436b; }
+  .tab .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--faint); }
+  .tab[data-k="ship"] .dot { background: var(--green); }
+  .tab[data-k="decline"] .dot { background: var(--amber); }
+  .tab[data-k="reproduce"] .dot { background: var(--blue); }
+  .tab.active { color: var(--text); background: #16203a; border-color: #33436b; }
+
+  .console {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+  }
+  .bar {
+    display: flex; align-items: center; gap: 8px; padding: 11px 14px;
+    background: var(--panel-2); border-bottom: 1px solid var(--border);
+  }
+  .bar .btns { display: flex; gap: 6px; }
+  .bar .btns i { width: 11px; height: 11px; border-radius: 999px; display: inline-block; }
+  .bar .btns i:nth-child(1){ background:#ff5f57; } .bar .btns i:nth-child(2){ background:#febc2e; } .bar .btns i:nth-child(3){ background:#28c840; }
+  .bar .title { font-family: var(--mono); font-size: 12px; color: var(--faint); margin-left: 6px; }
+  .bar .replay {
+    margin-left: auto; font-family: var(--sans); font-size: 12.5px; color: var(--muted);
+    background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 11px; cursor: pointer;
+  }
+  .bar .replay:hover { color: var(--text); border-color: #33436b; }
+
+  .term { font-family: var(--mono); font-size: 13px; padding: 18px 18px 20px; min-height: 300px; }
+  .cmd { color: var(--text); }
+  .cmd .prompt { color: var(--green); }
+  .steps { margin-top: 10px; }
+  .step {
+    display: flex; gap: 10px; align-items: baseline; padding: 2px 0; color: var(--muted);
+    opacity: 0; transform: translateY(3px); animation: rise .28s ease forwards;
+  }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .step .mk { color: var(--green); flex: none; width: 12px; }
+  .step.pending .mk { color: var(--amber); }
+  .step.pending { color: var(--text); }
+  .cursor { display: inline-block; width: 8px; height: 15px; background: var(--green); vertical-align: text-bottom; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .verdict { margin-top: 16px; border-top: 1px dashed var(--border); padding-top: 16px; opacity: 0; animation: rise .35s ease forwards; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans);
+    font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px; border: 1px solid transparent;
+  }
+  .badge .d { width: 8px; height: 8px; border-radius: 999px; }
+  .badge.shipped { color: var(--green); background: rgba(70,209,158,.10); border-color: rgba(70,209,158,.30); }
+  .badge.shipped .d { background: var(--green); }
+  .badge.declined { color: var(--amber); background: rgba(242,180,90,.10); border-color: rgba(242,180,90,.30); }
+  .badge.declined .d { background: var(--amber); }
+  .badge.authored { color: var(--blue); background: rgba(99,179,255,.10); border-color: rgba(99,179,255,.30); }
+  .badge.authored .d { background: var(--blue); }
+  .reason { color: var(--muted); font-family: var(--sans); font-size: 14px; margin: 12px 0; }
+  .reason b { color: var(--text); }
+
+  .meta { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 6px; }
+  .chip {
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip .g { color: var(--green); } .chip .r { color: var(--red); }
+
+  .diff { margin-top: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; overflow-x: auto; }
+  .diff pre { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
+  .diff .add { color: var(--green); } .diff .del { color: var(--red); } .diff .hd { color: var(--brand); } .diff .ctx { color: var(--faint); }
+
+  .pr { margin-top: 14px; }
+  .pr a {
+    display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    color: #0b0e14; background: var(--green); padding: 8px 14px; border-radius: 9px; text-decoration: none;
+  }
+  .pr a.authored { background: var(--blue); }
+  .pr .none { color: var(--faint); font-family: var(--mono); font-size: 12.5px; }
+
+  footer { margin-top: 28px; color: var(--faint); font-size: 12.5px; }
+  footer a { color: var(--brand); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">⚒</div>
+      <h1>Agent Forge <span style="color:var(--faint);font-weight:400">/</span> Minions Console</h1>
+      <span class="tag">replay</span>
+    </div>
+    <p class="lede">
+      A <b>minion</b> is an autonomous agent that picks up one GitHub ticket, fixes it on a
+      sandboxed clone of the repo, runs the test suite, and opens a pull request
+      <b>only when a previously-failing test goes green with no regressions</b>. Otherwise it
+      declines. Below are real recorded runs. Pick one and watch it work.
+    </p>
+    <div class="links">
+      <a id="repoLink" href="https://github.com/salehaiftikharr/agent-forge" target="_blank" rel="noreferrer">Source on GitHub →</a>
+      <a href="https://github.com/salehaiftikharr/forge-minions-demo/pulls?q=is%3Apr" target="_blank" rel="noreferrer">The pull requests these runs opened →</a>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="console">
+    <div class="bar">
+      <span class="btns"><i></i><i></i><i></i></span>
+      <span class="title" id="barTitle">forge minion</span>
+      <button class="replay" id="replay">↺ Replay</button>
+    </div>
+    <div class="term">
+      <div class="cmd"><span class="prompt">$</span> <span id="cmd"></span></div>
+      <div class="steps" id="steps"></div>
+      <div class="verdict" id="verdict" style="display:none"></div>
+    </div>
+  </div>
+
+  <footer>
+    This console replays runs recorded from the public
+    <a href="https://github.com/salehaiftikharr/forge-minions-demo" target="_blank" rel="noreferrer">forge-minions-demo</a>
+    repository. The pull-request links are real; follow them to verify the work. Built by
+    <a href="https://saleha.live" target="_blank" rel="noreferrer">Saleha Iftikhar</a>.
+  </footer>
+</div>
+
+<script>
+const SCENARIOS = {
+  ship: {
+    label: "Ship a fix", prompt: 'work on the clamp bug',
+    ticket: "Add a clamp(n, min, max) helper",
+    steps: [
+      "issue #3: Add a clamp(n, min, max) helper",
+      "cloning salehaiftikharr/forge-minions-demo…",
+      "baseline: 3/7 tests passing",
+      "scope hints: test/utils.test.js",
+      "studying the codebase…",
+      "plan ready",
+      "implementing…",
+      "final: 4/7 passing, verifying…",
+      "mutation-testing the fix…",
+      "mutation check: 3/3 mutants caught",
+      "approved, pushing branch and opening PR…",
+    ],
+    status: "shipped", statusLabel: "Pull request opened",
+    reason: "The diff adds a correct, properly exported clamp function using Math.min/Math.max that satisfies all stated cases.",
+    baseline: [3, 7], final: [4, 7], mutation: "3/3 mutants caught",
+    prUrl: "https://github.com/salehaiftikharr/forge-minions-demo/pull/9",
+    patch: "diff --git a/src/utils.js b/src/utils.js\n@@ export function add(a, b) {\n export function slugify(input) {\n   return String(input).trim().toLowerCase().replace(/\\s+/g, \"-\");\n }\n+\n+export function clamp(n, min, max) {\n+  return Math.min(Math.max(n, min), max);\n+}",
+  },
+  decline: {
+    label: "Decline", prompt: 'work on the add(2,2)=5 ticket',
+    ticket: "User reports add(2, 2) should equal 5",
+    steps: [
+      "issue: User reports add(2, 2) should equal 5",
+      "cloning salehaiftikharr/forge-minions-demo…",
+      "baseline: 2/7 tests passing",
+      "studying the codebase…",
+      "plan ready",
+      "implementing…",
+      "final: 2/7 passing, verifying…",
+      "no failing test was turned green, declining",
+    ],
+    status: "declined", statusLabel: "Declined, nothing shipped",
+    reason: "No previously-failing test was turned green, so the change does not actually close the ticket. The minion opens no pull request.",
+    baseline: [2, 7], final: [2, 7], mutation: null,
+    prUrl: null,
+    patch: "",
+  },
+  reproduce: {
+    label: "Reproduce a bug", prompt: 'write a failing test for the slugify bug',
+    ticket: "slugify should strip leading and trailing dashes",
+    steps: [
+      "issue: slugify should strip leading and trailing dashes",
+      "cloning salehaiftikharr/forge-minions-demo…",
+      "baseline: 3/7 tests passing",
+      "writing a failing reproduction test…",
+      "authored, pushing the test and opening a PR for review…",
+    ],
+    status: "authored", statusLabel: "Reproduction test opened",
+    reason: "Wrote a failing reproduction test, \"slugify: strips leading and trailing dashes,\" that pins the bug so a fix can be verified against it.",
+    baseline: [3, 7], final: null, mutation: null,
+    prUrl: "https://github.com/salehaiftikharr/forge-minions-demo/pull/10",
+    patch: "diff --git a/test/slugify-trim.test.js b/test/slugify-trim.test.js\nnew file mode 100644\n+import test from \"node:test\";\n+import assert from \"node:assert/strict\";\n+import * as utils from \"../src/utils.js\";\n+\n+test(\"slugify: strips leading and trailing dashes\", () => {\n+  assert.equal(utils.slugify(\"-Hello-\"), \"hello\");\n+});",
+  },
+};
+
+const $ = (s) => document.querySelector(s);
+let current = "ship";
+let timers = [];
+function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+function renderTabs() {
+  const t = $("#tabs");
+  t.innerHTML = "";
+  for (const [k, s] of Object.entries(SCENARIOS)) {
+    const b = document.createElement("button");
+    b.className = "tab" + (k === current ? " active" : "");
+    b.dataset.k = k;
+    b.innerHTML = `<span class="dot"></span>${s.label}`;
+    b.onclick = () => { current = k; renderTabs(); play(); };
+    t.appendChild(b);
+  }
+}
+
+function renderDiff(patch) {
+  if (!patch) return "";
+  const lines = patch.split("\n").map((l) => {
+    const cls = l.startsWith("+") ? "add" : l.startsWith("-") ? "del"
+      : (l.startsWith("diff ") || l.startsWith("@@") || l.startsWith("new file")) ? "hd" : "ctx";
+    const esc = l.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<span class="${cls}">${esc || " "}</span>`;
+  });
+  return `<div class="diff"><pre>${lines.join("\n")}</pre></div>`;
+}
+
+function verdictHTML(s) {
+  const tests = s.final
+    ? `<span class="chip">tests <b>${s.baseline[0]}/${s.baseline[1]}</b> → <b class="g">${s.final[0]}/${s.final[1]}</b></span>`
+    : `<span class="chip">baseline <b>${s.baseline[0]}/${s.baseline[1]}</b></span>`;
+  const mut = s.mutation ? `<span class="chip">mutation <b class="g">${s.mutation}</b></span>` : "";
+  const pr = s.prUrl
+    ? `<div class="pr"><a class="${s.status}" href="${s.prUrl}" target="_blank" rel="noreferrer">View the pull request →</a></div>`
+    : `<div class="pr"><span class="none">// no pull request opened, this is the point</span></div>`;
+  return `
+    <span class="badge ${s.status}"><span class="d"></span>${s.statusLabel}</span>
+    <p class="reason">${s.reason}</p>
+    <div class="meta">${tests}${mut}<span class="chip">ticket <b>${s.ticket}</b></span></div>
+    ${renderDiff(s.patch)}
+    ${pr}`;
+}
+
+function play() {
+  clearTimers();
+  const s = SCENARIOS[current];
+  $("#barTitle").textContent = `forge minion "${s.prompt}"`;
+  $("#cmd").innerHTML = `forge minion "${s.prompt}"<span class="cursor"></span>`;
+  const steps = $("#steps"); steps.innerHTML = "";
+  const verdict = $("#verdict"); verdict.style.display = "none"; verdict.innerHTML = "";
+
+  let delay = 380;
+  s.steps.forEach((line, i) => {
+    timers.push(setTimeout(() => {
+      // settle the previously-pending line
+      const prev = steps.querySelector(".step.pending");
+      if (prev) { prev.classList.remove("pending"); }
+      const el = document.createElement("div");
+      const last = i === s.steps.length - 1;
+      el.className = "step" + (last ? "" : " pending");
+      el.innerHTML = `<span class="mk">${last ? "✓" : "▸"}</span><span>${line}</span>`;
+      steps.appendChild(el);
+      if (last) {
+        $("#cmd").querySelector(".cursor")?.remove();
+        el.querySelector(".mk").textContent = "✓";
+      }
+    }, delay));
+    delay += 360 + Math.min(line.length * 6, 340);
+  });
+
+  timers.push(setTimeout(() => {
+    verdict.innerHTML = verdictHTML(s);
+    verdict.style.display = "block";
+  }, delay + 120));
+}
+
+$("#replay").onclick = play;
+renderTabs();
+play();
+</script>
+</body>
+</html>
