@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // The web app reads the engine's on-disk receipt/eval data from the repo root,
-  // which lives one directory up from web/. Allow that during builds.
-  outputFileTracingRoot: new URL("..", import.meta.url).pathname,
+  // Self-contained production server for the container image. Engine eval data is
+  // vendored in web/engine-data and read at build time (static generation), so no
+  // repo-root access or runtime secret is needed.
+  output: "standalone",
   // Keep the dev overlay out of screenshots and off the sidebar footer.
   devIndicators: false,
 };

@@ -1,0 +1,29 @@
+name: web
+
+on:
+  push:
+    branches: [main, forge-product-rebuild]
+    paths: ["web/**", ".github/workflows/web.yml"]
+  pull_request:
+    paths: ["web/**", ".github/workflows/web.yml"]
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end + accessibility (builds the production app, then runs 34 e2e + axe)
+        run: npm run test:e2e
