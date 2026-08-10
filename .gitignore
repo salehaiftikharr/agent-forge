@@ -25,3 +25,4 @@ node_modules
 
 # functional app runtime data (db + run workspaces)
 /.forge-data/
+/web/.forge-e2e/
