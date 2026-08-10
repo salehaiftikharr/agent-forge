@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 360" role="img"
+     aria-label="How Agent Forge works: you describe a job in plain English; Forge turns it into a Minion with a fixed tool set and its own tests; the Minion works on a sandboxed clone and runs the suite; a verification gate asks whether a previously-failing test now passes; if it does, the Minion opens a pull request, and if it cannot verify a fix it declines and says why. The minion can read the test but cannot write it. One engine drives the CLI, Slack, and the web product.">
+  <defs>
+    <style>
+      .box { fill: #161b22; stroke: #2a3138; stroke-width: 1.5; }
+      .gate { fill: #2a1a14; stroke: #ff6a3d; stroke-width: 2; }
+      .title { font: 700 16px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e8eaee; }
+      .sub { font: 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #9aa2ad; }
+      .edge { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #9aa2ad; }
+      .accent { fill: #ff875c; }
+      .good { fill: #4cc796; }
+      .decl { fill: #82abe4; }
+      .note { font: italic 12.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #9aa2ad; }
+      .foot { font: 600 14px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e8eaee; }
+      .line { stroke: #3a424b; stroke-width: 1.75; fill: none; }
+      .lineac { stroke: #ff6a3d; stroke-width: 2.25; fill: none; }
+      .lined { stroke: #3d5372; stroke-width: 1.75; fill: none; }
+    </style>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#3a424b"/></marker>
+    <marker id="ahac" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#ff6a3d"/></marker>
+    <marker id="ahd" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#3d5372"/></marker>
+  </defs>
+
+  <!-- pipeline -->
+  <g>
+    <rect class="box" x="20" y="60" width="150" height="70" rx="10"/>
+    <text class="title" x="95" y="92" text-anchor="middle">You</text>
+    <text class="sub" x="95" y="112" text-anchor="middle">a job, plain English</text>
+
+    <rect class="box" x="210" y="60" width="160" height="70" rx="10"/>
+    <text class="title" x="290" y="92" text-anchor="middle">Forge</text>
+    <text class="sub" x="290" y="112" text-anchor="middle">spec → agent + tests</text>
+
+    <rect class="box" x="410" y="60" width="160" height="70" rx="10"/>
+    <text class="title" x="490" y="92" text-anchor="middle">Minion</text>
+    <text class="sub" x="490" y="112" text-anchor="middle">fixed tools · gated writes</text>
+
+    <rect class="box" x="610" y="60" width="160" height="70" rx="10"/>
+    <text class="title" x="690" y="92" text-anchor="middle">Sandboxed run</text>
+    <text class="sub" x="690" y="112" text-anchor="middle">runs the test suite</text>
+
+    <!-- the gate: the one element that matters -->
+    <rect class="gate" x="810" y="55" width="170" height="80" rx="12"/>
+    <circle cx="895" cy="47" r="5" fill="#ff6a3d"/>
+    <text class="title accent" x="895" y="90" text-anchor="middle">Verification gate</text>
+    <text class="sub" x="895" y="110" text-anchor="middle">did a failing test pass?</text>
+  </g>
+
+  <!-- outcomes -->
+  <rect class="box" x="1020" y="18" width="120" height="60" rx="10"/>
+  <text class="title good" x="1080" y="44" text-anchor="middle">Open a PR</text>
+  <text class="sub" x="1080" y="62" text-anchor="middle">no regressions</text>
+
+  <rect class="box" x="1020" y="112" width="120" height="60" rx="10"/>
+  <text class="title decl" x="1080" y="138" text-anchor="middle">Decline</text>
+  <text class="sub" x="1080" y="156" text-anchor="middle">and say why</text>
+
+  <!-- edges -->
+  <path class="line" d="M170 95 H206" marker-end="url(#ah)"/>
+  <path class="line" d="M370 95 H406" marker-end="url(#ah)"/>
+  <path class="line" d="M570 95 H606" marker-end="url(#ah)"/>
+  <path class="line" d="M770 95 H806" marker-end="url(#ah)"/>
+  <text class="edge" x="388" y="86" text-anchor="middle">creates</text>
+
+  <!-- gate outcomes -->
+  <path class="lineac" d="M980 84 C1000 70, 1000 55, 1018 50" marker-end="url(#ahac)"/>
+  <text class="edge accent" x="1000" y="42" text-anchor="middle">passes</text>
+  <path class="lined" d="M980 108 C1000 122, 1000 138, 1018 142" marker-end="url(#ahd)"/>
+  <text class="edge" x="1000" y="166" text-anchor="middle">cannot verify</text>
+
+  <!-- trust note -->
+  <text class="note" x="812" y="186" text-anchor="start">reads the test, cannot write it</text>
+
+  <!-- one engine, three doors -->
+  <rect x="20" y="292" width="1120" height="46" rx="10" fill="#12161c" stroke="#262b30" stroke-width="1.5"/>
+  <text class="foot" x="40" y="320">One engine, three doors:</text>
+  <text class="edge" x="248" y="320">CLI</text>
+  <text class="edge" x="300" y="320">·</text>
+  <text class="edge" x="318" y="320">Slack</text>
+  <text class="edge" x="372" y="320">·</text>
+  <text class="edge" x="390" y="320">Web</text>
+  <text class="sub" x="1120" y="320" text-anchor="end">every run leaves a receipt: steps, tools, approvals, tests, cost</text>
+</svg>

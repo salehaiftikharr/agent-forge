@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+/* Forge design system. Steel neutrals + one molten ember, light and dark
+   designed together (mirrors brand/tokens.css, kept inline so the app is
+   self-contained). Status colors are semantic and separate from the accent. */
+
+:root {
+  --forge-bg: #f3f5f7;
+  --forge-surface: #ffffff;
+  --forge-surface-2: #f7f9fb;
+  --forge-ink: #14181d;
+  --forge-muted: #59616d;
+  --forge-line: #e0e4ea;
+  --forge-accent: #d8451f;
+  --forge-accent-text: #b8360f;
+  --forge-glow: rgba(216, 69, 31, 0.12);
+  --forge-shipped: #12855b;
+  --forge-declined: #3e6fa8;
+  --forge-waiting: #c98a12;
+  --forge-failed: #c1352b;
+  --forge-running: #d8451f;
+  --forge-idle: #59616d;
+  --forge-radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --forge-bg: #0c0e11;
+    --forge-surface: #14171b;
+    --forge-surface-2: #191d22;
+    --forge-ink: #e8eaee;
+    --forge-muted: #99a0ab;
+    --forge-line: #242a31;
+    --forge-accent: #ff6a3d;
+    --forge-accent-text: #ff875c;
+    --forge-glow: rgba(255, 106, 61, 0.14);
+    --forge-shipped: #37b982;
+    --forge-declined: #5a8ac6;
+    --forge-waiting: #e0a53a;
+    --forge-failed: #e0655a;
+    --forge-running: #ff6a3d;
+    --forge-idle: #99a0ab;
+  }
+}
+
+:root[data-theme="dark"] {
+  --forge-bg: #0c0e11;
+  --forge-surface: #14171b;
+  --forge-surface-2: #191d22;
+  --forge-ink: #e8eaee;
+  --forge-muted: #99a0ab;
+  --forge-line: #242a31;
+  --forge-accent: #ff6a3d;
+  --forge-accent-text: #ff875c;
+  --forge-glow: rgba(255, 106, 61, 0.14);
+  --forge-shipped: #37b982;
+  --forge-declined: #5a8ac6;
+  --forge-waiting: #e0a53a;
+  --forge-failed: #e0655a;
+  --forge-running: #ff6a3d;
+  --forge-idle: #99a0ab;
+}
+
+@theme inline {
+  --color-bg: var(--forge-bg);
+  --color-surface: var(--forge-surface);
+  --color-surface-2: var(--forge-surface-2);
+  --color-ink: var(--forge-ink);
+  --color-muted: var(--forge-muted);
+  --color-line: var(--forge-line);
+  --color-accent: var(--forge-accent);
+  --color-accent-text: var(--forge-accent-text);
+  --color-shipped: var(--forge-shipped);
+  --color-declined: var(--forge-declined);
+  --color-waiting: var(--forge-waiting);
+  --color-failed: var(--forge-failed);
+  --color-running: var(--forge-running);
+  --color-idle: var(--forge-idle);
+  --font-sans: var(--font-inter, "Inter", ui-sans-serif, system-ui, sans-serif);
+  --font-mono: var(--font-geist-mono, "Geist Mono", ui-monospace, monospace);
+  --radius-forge: var(--forge-radius);
+}
+
+/* Dark variant driven by next-themes' data-theme attribute (and the system
+   preference when the user has not chosen), so dark: utilities work too. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+* {
+  border-color: var(--forge-line);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+body {
+  background: var(--forge-bg);
+  color: var(--forge-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+  background: var(--forge-glow);
+}
+
+:focus-visible {
+  outline: 2px solid var(--forge-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* The self-forging draw, used by the animated mark and as loading language. */
+@keyframes forge-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes ember-pop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+/* Accessibility: a text-safe accent for buttons (white-on-accent >= 4.5:1) and
+   darker status text for pills (status-on-tint >= 4.5:1). The vivid ember
+   (--forge-accent) stays for marks, dots, and timelines where it is not text. */
+:root {
+  --forge-accent-strong: #b8360f;
+  --forge-on-accent: #ffffff;
+  --forge-shipped-ink: #0c6b45;
+  --forge-declined-ink: #2d5f96;
+  --forge-waiting-ink: #8a5d08;
+  --forge-failed-ink: #b3372f;
+  --forge-running-ink: #b8360f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --forge-accent-strong: #ff6a3d;
+    --forge-on-accent: #0c0e11;
+    --forge-shipped-ink: #4cc796;
+    --forge-declined-ink: #82abe4;
+    --forge-waiting-ink: #e6b054;
+    --forge-failed-ink: #ec7d73;
+    --forge-running-ink: #ff875c;
+  }
+}
+:root[data-theme="dark"] {
+  --forge-accent-strong: #ff6a3d;
+  --forge-on-accent: #0c0e11;
+  --forge-shipped-ink: #4cc796;
+  --forge-declined-ink: #82abe4;
+  --forge-waiting-ink: #e6b054;
+  --forge-failed-ink: #ec7d73;
+  --forge-running-ink: #ff875c;
+}
+:root[data-theme="light"] {
+  --forge-accent-strong: #b8360f;
+  --forge-on-accent: #ffffff;
+  --forge-shipped-ink: #0c6b45;
+  --forge-declined-ink: #2d5f96;
+  --forge-waiting-ink: #8a5d08;
+  --forge-failed-ink: #b3372f;
+  --forge-running-ink: #b8360f;
+}

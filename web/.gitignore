@@ -1,0 +1,9 @@
+node_modules
+.next
+next-env.d.ts
+*.tsbuildinfo
+.playwright-mcp
+*.png
+test-results
+playwright-report
+playwright/.cache

@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+test-results
+playwright-report
+playwright/.cache
+.playwright-mcp
+*.png
+Dockerfile
+.dockerignore

@@ -1,0 +1,80 @@
+/* Agent Forge brand tokens — the "Forge" system.
+   Cool steel neutrals (the workshop) with a single molten ember accent (the
+   strike). Deliberately distinct from Rendi's warm-paper amber. Light and dark
+   are designed together, not inverted. Status colors are semantic and separate
+   from the accent: a declined run is a correct refusal, not an error, so it is
+   not red. */
+
+:root {
+  --forge-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --forge-font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Steel neutrals */
+  --forge-bg: #f3f5f7;
+  --forge-surface: #ffffff;
+  --forge-surface-2: #f7f9fb;
+  --forge-ink: #14181d;
+  --forge-muted: #59616d;
+  --forge-line: #e0e4ea;
+
+  /* Ember accent (the strike) */
+  --forge-accent: #d8451f;      /* fills, marks, the one arrow that matters */
+  --forge-accent-text: #b8360f; /* accent as text, AA on light bg */
+  --forge-glow: rgba(216, 69, 31, 0.12);
+
+  /* Semantic status (independent of accent) */
+  --forge-shipped: #12855b;   /* verified fix, tests green */
+  --forge-declined: #3e6fa8;  /* held back on purpose — correct, not an error */
+  --forge-waiting: #c98a12;   /* waiting for approval */
+  --forge-failed: #c1352b;    /* a genuine error */
+  --forge-running: #d8451f;   /* work in progress (ember) */
+  --forge-idle: #59616d;
+
+  --forge-radius-sm: 7px;
+  --forge-radius: 10px;
+  --forge-radius-lg: 14px;
+  --forge-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --forge-draw: 1.6s;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --forge-bg: #0c0e11;
+    --forge-surface: #14171b;
+    --forge-surface-2: #191d22;
+    --forge-ink: #e8eaee;
+    --forge-muted: #99a0ab;
+    --forge-line: #242a31;
+
+    --forge-accent: #ff6a3d;
+    --forge-accent-text: #ff875c;
+    --forge-glow: rgba(255, 106, 61, 0.14);
+
+    --forge-shipped: #37b982;
+    --forge-declined: #5a8ac6;
+    --forge-waiting: #e0a53a;
+    --forge-failed: #e0655a;
+    --forge-running: #ff6a3d;
+    --forge-idle: #99a0ab;
+  }
+}
+
+:root[data-theme="light"] {
+  --forge-bg: #f3f5f7; --forge-surface: #ffffff; --forge-surface-2: #f7f9fb;
+  --forge-ink: #14181d; --forge-muted: #59616d; --forge-line: #e0e4ea;
+  --forge-accent: #d8451f; --forge-accent-text: #b8360f; --forge-glow: rgba(216,69,31,0.12);
+  --forge-shipped: #12855b; --forge-declined: #3e6fa8; --forge-waiting: #c98a12;
+  --forge-failed: #c1352b; --forge-running: #d8451f; --forge-idle: #59616d;
+}
+
+:root[data-theme="dark"] {
+  --forge-bg: #0c0e11; --forge-surface: #14171b; --forge-surface-2: #191d22;
+  --forge-ink: #e8eaee; --forge-muted: #99a0ab; --forge-line: #242a31;
+  --forge-accent: #ff6a3d; --forge-accent-text: #ff875c; --forge-glow: rgba(255,106,61,0.14);
+  --forge-shipped: #37b982; --forge-declined: #5a8ac6; --forge-waiting: #e0a53a;
+  --forge-failed: #e0655a; --forge-running: #ff6a3d; --forge-idle: #99a0ab;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --forge-draw: 0s; }
+}

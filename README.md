@@ -1,75 +1,110 @@
 # Agent Forge
 
-> Agents that do real work — and prove it. Forge **builds** agents from plain
-> English; its **minions** fix real GitHub and Linear tickets and open pull
-> requests only when the tests prove the fix.
+[![CI](https://github.com/salehaiftikharr/agent-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/salehaiftikharr/agent-forge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Highlights**
+Agents that do real work, and prove it. **Forge** builds agents from plain
+English. Its **minions** fix real GitHub and Linear tickets and open a pull
+request only when the tests prove the fix, and decline when they cannot.
 
-- 🏭 **Forge** generates an agent *and its own acceptance tests*, then tests → repairs → re-tests until it passes.
-- 🤖 **Minions** fix a ticket on a sandbox clone and open a **verified** pull request — only when a failing test goes green with no regressions. **Zero unsafe ships** on a labeled eval.
-- 🔒 **A gate that's hard to game** — the harness re-runs the tests (never the model's word), minions can't edit tests, and **mutation testing** + flaky-guarding sit under an independent LLM judge.
-- 🥊 **Adversarial review (optional)** — turn on a panel of independent skeptics, each given a different lens (wrong edge cases, gamed, hidden regressions), that try to *refute* a fix; it ships only if it beats a majority. Several reviewers hunting different failures catch what one approver misses.
-- 🎯 **Confidence + blast-radius scoring** — a change that clears every gate is also *scored*: a calibrated 0–1 confidence (from mutation catch rate, tests flipped, the judge, and how much it touches) decides whether it ships ready-to-merge or opens as a **draft** for a human. Knowing how sure it is, is a feature.
-- 🏆 **Best-of-N tournament** — optionally generate several independent candidate fixes from the same plan, run each through the *full* gate, and ship only the strongest (highest confidence, then smallest blast radius and diff). More shots on goal, same bar.
-- 🧪 **Reproduction mode** — a separate spec-author minion writes *only* a failing test for an untested bug, keeping the test-writer and the fixer apart.
-- 🧠 **Repo-agnostic & self-sharpening** — auto-detects the test runner (Vitest / Jest / Mocha / Go / node:test), scopes from the ticket's stack trace, and remembers each repo between runs.
-- 💬 **Front doors** — run it from the CLI, or just chat with a Slack bot: *"show me the issues in ENG"* → *"work on the login bug."*
-- 💸 **Knows what it costs** — every run records its tokens, an estimated dollar cost, and wall-clock time; `forge costs` rolls them into ship rate and **cost per shipped PR**, the number an operator actually budgets on.
-- 🧾 **Auditable** — every run leaves a receipt, and `forge corpus` checks what humans did with each PR so "zero unsafe ships" stays honest over time.
+**[▶ Watch it run](web/index.html)** in the minions console: a replay of real
+recorded runs, including the one where it declines rather than ship a bad fix.
 
-_New here? The two sections that follow — **Forge** then **Minions** — are the whole story; everything below is detail._
+[![The minions console replaying a verified fix](docs/console.png)](web/index.html)
 
----
+The single number that matters: on a hand-labeled eval, the minions had **zero
+unsafe ships**. They shipped every legitimate fix and refused every bad one. And
+the proof is not a screenshot: a minion read an issue on a public demo repo and
+opened this on its own,
+**[forge-minions-demo#2](https://github.com/salehaiftikharr/forge-minions-demo/pull/2)**.
 
-**An agent that builds agents.** You describe an automation in plain English;
-Forge designs a working agent for it — system prompt, tools, *and its own
-acceptance tests* — then **tests it, and if it fails, fixes it and tests again**
-until it passes. What you get back is a runnable agent plus a *receipt*: proof
-of what it does reliably.
+## In 30 seconds
+
+- **Verification gate.** A minion opens a pull request only when a
+  previously-failing test passes with no regressions, and it cannot edit the
+  test it is judged against.
+- **Zero unsafe ships** on a hand-labeled evaluation: 4/4 good fixes shipped,
+  3/3 bad fixes declined.
+- **One engine, three doors.** The same engine drives a CLI, a Slack bot, and a
+  web product.
+- **Auditable by design.** Every run carries a receipt: steps, tool calls,
+  approvals, refusals, tests, and cost.
+
+## The web product
+
+A full product surface lives in [`web/`](web/): a landing page, a guided demo
+that walks a Minion from proposal to a verified pull request, and an application
+(Forge workbench, Minions roster and detail, Runs with timelines and
+approvals).
+
+```
+cd web && npm install && npm run dev   # http://localhost:3001
+```
+
+Public pages use a fictional dataset; the evaluation numbers are read from the
+engine's recorded output. See [`web/README.md`](web/README.md) and the rebuild
+notes in [`docs/REBUILD-AUDIT.md`](docs/REBUILD-AUDIT.md).
+
+## Architecture
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/architecture-dark.svg">
+    <img src="brand/architecture.svg" width="1000" alt="How Agent Forge works: you describe a job in plain English; Forge turns it into a Minion with a fixed tool set and its own tests; the Minion works on a sandboxed clone and runs the suite; a verification gate asks whether a previously-failing test now passes; if it does, the Minion opens a pull request, and if it cannot verify a fix it declines and says why. The minion can read the test but cannot write it. One engine drives the CLI, Slack, and the web product.">
+  </picture>
+</p>
+
+## What it is
+
+- **Forge** takes a plain-English description and designs a working agent for it
+  (system prompt, a fixed set of safe tools, and its own acceptance tests), then
+  tests it and, if it fails, repairs it and tests again until it passes. What you
+  get back is a runnable agent plus a receipt proving what it does.
+- **Minions** are what Forge makes: autonomous workers that each pick up one
+  ticket, fix it on a sandboxed clone of the repo, run the test suite, and open a
+  pull request only when a previously-failing test goes green with no regressions.
+  Otherwise they decline. A minion can read the tests but physically cannot write
+  them, so it cannot pass by editing the gate it is judged against.
+
+Run it from the CLI, or chat with a Slack bot ("show me the issues in ENG" then
+"work on the login bug"). Everything is verified, receipted, and auditable.
+
+## Forge: an agent that builds agents
+
+You describe an automation; Forge designs the agent, generates its acceptance
+tests, and runs the agent against them. When it falls short, it feeds the
+failures back to the builder, which revises the agent and re-tests. An agent
+improving an agent, with evals as the control signal.
 
 ```
 $ forge build "Given a city, tell me its current weather using the open-meteo API" --repair
 ✓ Built "weather-reporter"  (tools: http_get_json, current_datetime, calculator · tests: 4)
 
-Proving it works (test → repair → test)…
-  testing the initial build…
-
-Receipt — "weather-reporter": ✓ passing (4/4) via anthropic/claude-opus-4-8
+Receipt "weather-reporter": passing (4/4) via anthropic/claude-opus-4-8
   build      4/4
 ```
 
-The headline is that loop. Most "build an agent" tools stop at generating a
-prompt. Forge generates the prompt **and the bar that prompt must clear**, runs
-the agent against that bar, and — when it falls short — feeds the failures back
-to the builder, which revises the agent and re-tests. An agent improving an
-agent, with evals as the control signal. Every agent ships with the receipt
-showing how it got there.
-
-Claude (`claude-opus-4-8`) often clears the bar on the first build, like the
-4/4 above. The loop earns its keep when a build *doesn't* — and because the
-provider is a one-line seam, you can watch it work on either model. The same
-weather task built on GPT-4.1 missed one test (it fetched the weather but
-didn't cite the source the test demanded) and the repair round fixed exactly
-that:
+Claude (`claude-opus-4-8`) often clears the bar on the first build. The loop
+earns its keep when a build does not, and because the provider is a one-line
+seam you can watch it work on either model. The same task built on GPT-4.1
+missed one test (it fetched the weather but did not cite the source the test
+demanded) and the repair round fixed exactly that:
 
 ```
-Receipt — "city-weather-fetcher": ✓ passing (3/3) via openai/gpt-4.1
+Receipt "city-weather-fetcher": passing (3/3) via openai/gpt-4.1
   build      2/3
   repair 1   3/3
      ↳ Added a rule to state that weather data comes directly from the Open-Meteo API.
 ```
 
-Both receipts are committed in [`examples/`](examples/).
+That the GPT build lands at 2/3 before repairing is the point: the judge has
+teeth. Both receipts are committed in [`examples/`](examples/).
 
----
+## Minions: verified ticket-closers
 
-## Minions — autonomous, *verified* ticket-closers
-
-Forge is the factory; **minions are what it makes.** A minion is an autonomous
-agent that picks up one ticket, fixes it on a sandbox copy of the repo, **runs
-the tests**, and ships a branch + diff + receipt — *only* if the fix turns a
-failing test green **without breaking anything**. If it can't, it declines.
+A minion fixes one ticket on a sandbox copy of the repo, runs the tests, and
+ships a branch, diff, and receipt only if the fix turns a failing test green
+without breaking anything. If it cannot, it declines.
 
 ```
 $ forge minion all
@@ -78,42 +113,35 @@ $ forge minion all
 ✓ shipped   (3/6 tests) · branch minion/ticket-001
 ▶ [TICKET-002] Add a clamp(n, min, max) helper
 ✓ shipped   (3/6 tests) · branch minion/ticket-002
-▶ [TICKET-003] parseQueryString should URL-decode values and handle valueless keys
-✓ shipped   (3/6 tests) · branch minion/ticket-003
 ▶ [TICKET-004] User reports add(2, 2) should equal 5
-⊘ declined  — won't break the passing add() test to satisfy a bogus report
+⊘ declined  (won't break the passing add() test to satisfy a bogus report)
 
-— fleet done: 3 shipped, 1 declined, 4 total —
+  fleet done: 2 shipped, 1 declined
 ```
 
-**What makes these different from "an agent that opens PRs":** the verification
-is real and the agent can't game it.
+What makes this different from "an agent that opens PRs" is that the
+verification is real and the agent cannot game it:
 
-- **The gate is the test suite, re-run by the harness — never the model's word.**
-  A ticket ships only if a previously-failing test is now green *and* no test
-  that was passing has regressed (tracked per-test, by name).
-- **A minion can read the tests but cannot write them.** The workspace
-  physically refuses writes to the test directory, so a minion can't "pass" by
-  editing the gate it's judged against.
-- **It declines bad work.** TICKET-004 is a bogus report ("add(2,2) should be
-  5") — satisfying it would regress a passing test, so the minion declines
-  rather than ship a regression. *Knowing when not to proceed is the feature.*
-- **Every run leaves a receipt** — baseline vs. final tests, steps taken, the
-  diff, and the ship/decline decision with its reason. Committed examples:
-  [shipped](examples/minions/TICKET-001-shipped.json) ·
-  [declined](examples/minions/TICKET-004-declined.json).
+- **The gate is the test suite, re-run by the harness, never the model's word.**
+  A ticket ships only if a previously-failing test is now green and no passing
+  test regressed, tracked per-test by name.
+- **A minion can read tests but cannot write them.** The workspace physically
+  refuses writes to the test directory.
+- **It declines bad work.** The "add(2,2) should be 5" report is bogus;
+  satisfying it would regress a passing test, so the minion declines. Knowing
+  when not to proceed is the feature.
+- **Every run leaves a receipt**: baseline vs. final tests, steps, the diff, and
+  the ship or decline decision with its reason.
 
-It writes only inside a per-ticket sandbox copy (`.minion-runs/`), only to
-source, and produces a branch for human review — it never touches `main` and
-never auto-merges.
+It writes only inside a per-ticket sandbox (`.minion-runs/`), only to source, and
+produces a branch for human review. It never touches `main` and never auto-merges.
 
-### Does it ship the right work? The verification eval
+### The verification eval: zero unsafe ships
 
-An autonomous PR-opener is only as trustworthy as its decision about *when* to
-open one. `forge eval` holds the gate to a hand-labeled set of tickets where
-the correct call is known — four that should **ship** (real, testable fixes)
-and three that should be **declined** (shipping would regress a passing test,
-or the change can't be verified at all):
+An autonomous PR-opener is only as trustworthy as its decision about when to open
+one. `forge eval` holds the gate to a hand-labeled set: four tickets that should
+ship (real, testable fixes) and three that should be declined (shipping would
+regress a passing test, or the change cannot be verified at all).
 
 ```
 $ forge eval
@@ -123,59 +151,19 @@ Ship recall: 4/4 · Correctly declined: 3/3
 Unsafe ships (shipped work that should have been declined): 0
 ```
 
-**Zero unsafe ships is the property that matters.** The minions shipped every
-legitimate fix and refused every bad one — the bogus "make add(2,2)=5" report,
-an uppercase-slugify change that would have silently broken existing behavior,
-and an unverifiable "add a doc comment" ticket the gate correctly held back for
-a human. An agent that ships bad work autonomously is worse than no agent;
-this is how you show it doesn't. Full report:
-[`examples/minions/eval-report.json`](examples/minions/eval-report.json).
+Zero unsafe ships is the property that matters. An agent that ships bad work
+autonomously is worse than no agent; this is how you show it does not.
+`forge corpus` keeps that honest over time by checking what humans actually did
+with each shipped PR (merged, or closed unmerged) and turning any rejection into
+a new labeled eval case.
 
-And `forge corpus` keeps that honest *over time*: it checks what humans actually
-did with each shipped PR — merged (a confirmed good ship) or closed unmerged (a
-real counterexample) — and turns any rejection into a new labeled eval case. Run
-it on a cron and "zero unsafe ships" becomes a number you defend continuously,
-not once.
+### Real pull requests
 
-### Observability, trajectory evals, and memory
-
-Reliability needs more than a pass/fail at the end — you need to see *how* a run
-behaved, evaluate the *path* it took, and carry forward what it learned.
-
-- **Tracing.** Every model call in the build → run → judge → repair loop flows
-  through one instrumented wrapper, so a run records a trace: per-step type,
-  latency, token usage, tool-call steps, and failures. `forge trace` prints the
-  rollup for the last run (or any saved run); traces persist to `.forge-traces/`.
-
-  ```
-  $ forge trace
-  Trace build-… — 6 model call(s) · 14.2s · 38,940 tokens · 0 failure(s)
-    build      1 call(s) · 3.1s · 9,210 tok
-    run        3 call(s) · 7.4s · 18,300 tok
-    judge      2 call(s) · 3.7s · 11,430 tok
-  ```
-
-- **Trajectory-level evals.** `forge eval` grades the final decision; `forge
-  eval:trajectory` grades the *trajectory* — it runs a set of build tasks
-  through the full self-repair loop and reports what single-output metrics miss:
-  did it converge, did it recover from a failing first build, how many repair
-  rounds it took, and the token/latency cost. Two agents can both end up passing;
-  the one that needed three repair rounds is the more fragile trajectory.
-
-- **Persistent memory.** When a repair fixes a failing test, that fix is a lesson
-  ("on input X, the change that worked was Y"). Forge appends it to
-  `.forge-memory/` and recalls the relevant lessons (keyword overlap, recency
-  tie-break) on the next build or repair, so the system carries forward what it
-  learned instead of rediscovering the same fixes every run.
-
-### Real pull requests, not just a sandbox
-
-`forge pr <owner/repo> <issue>` runs the *same* minion and the *same* gates on
-a real cloned repository, and — only when the gates pass — pushes a branch and
-opens an actual pull request for human review. A minion read issue #1 on a demo
-repo and opened this, on its own:
-
-**→ [salehaiftikharr/forge-minions-demo#2](https://github.com/salehaiftikharr/forge-minions-demo/pull/2)** — a one-line, verified fix (3/3 tests passing, no regressions):
+`forge pr <owner/repo> <issue>` runs the same minion and the same gates on a real
+cloned repository, and only when the gates pass pushes a branch and opens an
+actual pull request. A minion read issue #1 on a demo repo and opened
+[forge-minions-demo#2](https://github.com/salehaiftikharr/forge-minions-demo/pull/2)
+on its own, a one-line verified fix with no regressions:
 
 ```diff
  export function slugify(input) {
@@ -184,199 +172,94 @@ repo and opened this, on its own:
  }
 ```
 
-It never commits to the default branch and never merges — the pull request is
-the artifact, opened for a human to review.
+## How a minion works, and why it is hard to game
 
-```bash
-forge tickets                 # the sandbox's open tickets
-forge minion TICKET-001       # set one minion on one ticket
-forge minion all              # work every ticket once
-forge fleet                   # run continuously — pick up new/changed tickets as they appear
-forge fleet --once            # drain the current backlog and exit
-forge eval                    # measure the gate on a labeled set (0 unsafe ships)
-forge pr <owner/repo> <n>     # fix a real GitHub issue and open a real pull request
-forge spec <owner/repo> <n>   # write a failing reproduction test for an issue (no fix), open it for review
-forge corpus                  # check what humans did with shipped PRs — defend zero-unsafe-ships over time
-forge costs                   # token, cost, and time economics across all runs (cost per shipped PR)
+```
+ticket → study the codebase (read-only) → write a plan
+       → branch off the base → implement (edit SOURCE only, run tests, iterate)
+       → harness re-runs the repo's OWN tests (ground truth)
+       → gate: a failing test went green AND nothing regressed?
+       → mutation check: mangle the fix's own lines, does the test catch it?
+       → judge: is the diff a legitimate, minimal fix?
+       → adversarial panel (optional): N skeptics try to refute it
+       → score: confidence (0 to 1) + blast radius → ship ready, or open a DRAFT
+       → SHIP (branch + PR) + receipt, or DECLINE + receipt
 ```
 
-### Reproduction-only mode: a spec-author minion
+A green test proves the test is satisfied, not that the fix is real. Several
+layers sit under that:
 
-A fixer ships only when a *previously-failing* test goes green — great for
-safety, but it means a ticket with no test coverage is an automatic decline.
-The clean way to loosen that without letting the fixer grade itself is to
-**split the role**: `forge spec <owner/repo> <n>` dispatches a separate
-**spec-author** minion that reads the ticket, writes *only* a failing
-reproduction test, confirms it fails against the current code, and stops —
-opening a PR with just that test for a human to approve. A fixer (which can
-write source but never tests) is then pointed at the approved gate it never
-authored. Separation of powers holds: one minion writes the gate, a different
-one fixes against it, and neither can do both (enforced in `workspace.ts` by
-role). A failing reproduction is useful output on its own, even with no fix
-attached.
+- **Mutation testing.** Perturb the fix's own lines (delete them, flip a
+  comparison, bump a constant) and re-run. If the now-green test survives every
+  mutation, it is not actually pinning the fix, so the minion declines as likely
+  gamed.
+- **Flaky-test guarding.** `MINION_TEST_RUNS` runs the suite N times and trusts a
+  test only if it passes every run, so a flaky green never earns a ship.
+- **Adversarial review, on demand.** Set `MINION_VERIFIERS=3` and a panel of
+  independent skeptics weighs in, each told to refute the change through a
+  different lens (a wrong edge case, a superficial pass, a regression the ticket
+  never mentioned). The change ships only if it beats a majority; a tie errs
+  toward rejection.
+- **Confidence and blast-radius scoring.** Passing every gate says nothing about
+  how risky shipping unattended is, so an approved change is also scored. A
+  calibrated confidence (0 to 1, from the mutation catch rate, tests flipped, the
+  judge's verdict, and how much the diff touches) and a mechanical blast-radius
+  read decide the lane: high-confidence and low-risk opens ready to merge;
+  anything else clears the same gates but opens as a draft for a human.
+  `MINION_CONFIDENCE_MIN` (default `0.7`) is one number you tune from receipts.
+- **Best-of-N.** Set `MINION_CANDIDATES` and the minion generates several
+  independent fixes from the same plan, runs every one through the full gate, and
+  keeps the strongest (highest confidence, then smallest blast radius, then
+  smallest diff). The bar is unchanged; a hard ticket just gets more chances.
+  Capped at 5, and it stops early once a candidate clears the auto-ship bar.
+- **Reproduction mode.** `forge spec <owner/repo> <n>` dispatches a separate
+  spec-author minion that writes only a failing reproduction test for an untested
+  bug and opens it for review. A fixer (which can write source but never tests)
+  is then pointed at the approved gate it never authored. One minion writes the
+  gate, a different one fixes against it, and neither can do both.
+- **Repo-agnostic and self-sharpening.** It auto-detects the test runner (Vitest,
+  Jest, Mocha, Go, node:test), scopes from the ticket's stack trace, and keeps a
+  per-repo profile of where past fixes landed, so it heads straight for the files
+  that matter instead of reading the whole tree every run.
 
-### Talk to your minions in Slack
+### Observability, trajectory evals, and memory
 
-The same minion has a front door: DM the bot (or `@mention` it) in plain
-English and it will either *browse* the work or *do* it. It runs in **Socket
-Mode** — no public URL, no deploy — on the laptop where `gh` is already
-authenticated.
+- **Tracing.** Every model call flows through one instrumented wrapper, so a run
+  records per-step type, latency, tokens, and failures. `forge trace` prints the
+  rollup; traces persist to `.forge-traces/`.
+- **Trajectory evals.** `forge eval` grades the final decision; `forge
+  eval:trajectory` grades the path: did it converge, did it recover from a failing
+  first build, how many repair rounds, at what token and latency cost.
+- **Persistent memory.** When a repair fixes a failing test, that lesson is
+  appended to `.forge-memory/` and recalled on the next build, so the system
+  carries forward what it learned instead of rediscovering it.
+
+## Talk to your minions in Slack
+
+The same minion has a front door: DM the bot in plain English and it will either
+browse the work or do it. It runs in Socket Mode (no public URL, no deploy) on
+the laptop where `gh` is already authenticated.
 
 ```
 you:    show me the open issues in ENG
 minion: Here's the open work in ENG (3):
-        1. ENG-10 🔴 Fix login button not responding on Safari  (Todo)
-        2. ENG-11 🟡 Add CSV export to the analytics dashboard  (Todo)
-        3. ENG-12 🟠 Crash when uploading large avatar images   (In Progress)
+        1. ENG-10  Fix login button not responding on Safari  (Todo)
+        2. ENG-11  Add CSV export to the analytics dashboard   (Todo)
+        3. ENG-12  Crash when uploading large avatar images    (In Progress)
 
 you:    work on the login bug in salehaiftikharr/forge-minions-demo
-minion: 🫡 On it — ENG-10 (Fix login button…) → salehaiftikharr/forge-minions-demo.
-        • cloning… • reproducing… • fix verified (4/4 tests, no regressions)
-        ✅ ENG-10 → https://github.com/…/pull/7
-        (and comments the PR link back on the Linear issue)
+minion: On it: ENG-10 → salehaiftikharr/forge-minions-demo.
+        cloning… reproducing… fix verified (4/4 tests, no regressions)
+        ENG-10 → https://github.com/…/pull/7   (and comments the link back on Linear)
 ```
 
-It reads the Linear backlog (`listLinearIssues`), and **remembers the list it
-just showed you per thread**, so you can follow up with `do the second one`,
-`work on ENG-12`, or `work on all of them` (a minion per issue, in turn)
-without repeating yourself. Choosing *which* ticket to run is deliberately a
-pure, unit-tested function ([`src/linear/select.ts`](src/linear/select.ts)) —
-when a request is ambiguous it asks rather than guesses. A plain GitHub issue
-still works too: `fix issue 3 in owner/repo`.
-
-```bash
-npm run slack                 # start the Socket Mode bot (needs SLACK_* + LINEAR_API_KEY)
-npm test                      # unit-test the selection resolver
-```
-
-### Running continuously
-
-`forge fleet` is the "all day" mode: it watches the ticket list and dispatches
-a minion whenever a ticket is **new or its text changed**, then idles until more
-work shows up. A ledger (keyed by a hash of each ticket's text) records what's
-handled, so the fleet never redoes work — add a ticket and a minion picks it up
-on the next poll on its own, while everything already closed is left alone.
-
-### How a minion works
-
-```
-ticket → study the whole codebase (read-only) → write a plan
-       → branch off the base → implement on the branch:
-            read code + tests · edit SOURCE only · run tests · iterate
-       → harness re-runs the repo's OWN tests (ground truth)
-       → gate: a failing test went green AND nothing regressed?
-       → mutation check: mangle the fix's own lines — does the test catch it?
-       → judge: is the diff a legitimate, minimal fix (not gamed)?
-       → adversarial panel (optional): N skeptics try to refute it — survives a majority?
-       → score: confidence (0–1) + blast radius → ship ready, or open a DRAFT
-       → SHIP (human commit + PR) + receipt, or DECLINE + receipt
-
-   (best-of-N: run the implement→gate→score loop N times from a clean
-    baseline and keep the strongest candidate — see below)
-```
-
-**Hard to game.** A green test proves the test is satisfied, not that the fix
-is real. Two mechanical layers sit under the LLM judge: **mutation testing**
-perturbs the fix's own lines (delete them, flip a comparison, bump a constant)
-and re-runs — if the now-green test survives every mutation, the test is not
-actually pinning the fix, so the minion declines as likely gamed. And
-**flaky-test guarding** (`MINION_TEST_RUNS`) runs the suite N times and trusts a
-test only if it passes every run, so a flaky green never earns a ship.
-
-**Adversarial review, on demand.** The LLM judge is one reviewer asking "is this
-good?" Set `MINION_VERIFIERS=3` and a *panel* of independent skeptics weighs in
-instead, each told to REFUTE the change through a different lens — find a wrong
-edge case, decide whether it only satisfies the test superficially, or catch a
-regression the ticket never mentioned. The change ships only if it beats a
-majority; a tie errs toward rejection. Several reviewers hunting *different*
-failure modes catch more than one approver or several reviewers asking the same
-question. It is off by default because it spends extra tokens (now visible in
-`forge costs`), and on for the runs where you want maximum rigor.
-
-**Knows how sure it is.** Passing every gate proves the fix is *correct*; it
-says nothing about how risky shipping it unattended is. So an approved change is
-also scored. A mechanical **blast-radius** read of the diff (size, file count,
-and whether it touches dependencies, migrations, CI, or config) and a
-**calibrated confidence** (0–1, built from the mutation catch rate, how many
-tests flipped green, the judge's verdict, and that blast radius) decide the
-*lane*: a high-confidence, low-risk change opens ready to merge; anything
-low-confidence or high-blast-radius clears the same gates but opens as a
-**draft** with a written verification body, so a human glances first. The
-threshold (`MINION_CONFIDENCE_MIN`, default `0.7`) is one number you can tune
-from the receipts — over a corpus you can say "shipped above 0.85, it was right
-N of N times" instead of trusting a vibe. This never blocks a correct change; it
-only chooses how it ships.
-
-**More shots on goal (best-of-N).** A single attempt is one sample of a
-stochastic model. Set `MINION_CANDIDATES` (or pass `candidates`) and the minion
-generates several independent fixes from the *same* plan — each starting from a
-clean baseline, blind to the others — runs every one through the full gate, and
-keeps the **strongest**: highest confidence, then smallest blast radius, then
-smallest diff. Losers are discarded; the winner is the only thing that ships, so
-the acceptance bar is unchanged — you are just giving a hard ticket more chances
-to clear it. It stops early once a candidate clears the auto-ship bar, so the
-common case stays cheap, and it is capped at 5 for cost.
-
-**Repo-agnostic by design.** A minion orients before it acts (it reads across
-the codebase and plans first), and it runs whatever test command the repo
-actually uses — `vitest`, `jest`, `mocha`, `go test`, `node:test`, or an npm
-`test` script are auto-detected, and `MINION_TEST_CMD` forces anything else.
-When the runner reports per-test results the gate reasons test-by-test (so
-unrelated failing tests stay out of scope); otherwise it requires the suite to
-go from failing to green. Pointing minions at a new project is configuration,
-not a code change.
-
-**Gets sharper on repeat visits.** Before studying the code, a minion seeds its
-orientation from the ticket's own file hints (stack traces, `path:line`,
-backticked paths — resolved against the real tree) and from a persistent
-per-repo profile of where past fixes landed and how the repo runs its tests. So
-instead of reading the whole tree blindly every run, it heads straight for the
-files that matter — cheaper and sharper the more it works a repo. The profile
-is a local cache (`.minion-profiles/`) it rebuilds on its own.
-
-Built on Forge's engine — the model seam, the agent loop, and the
-judge are the same pieces `build`/`refine` use. New in `src/minion/`:
-`workspace.ts` (the sandbox boundary + role-based write permissions),
-`test-runner.ts` (runner detection + result parsing), `mutate.ts` (mutation
-engine + diff parsing), `spec.ts` (the spec-author / reproduction mode),
-`scope.ts` (ticket/stack-trace scoping), `profile.ts` (the per-repo learning
-cache), `corpus.ts` (the PR-outcome corpus), `risk.ts` (blast-radius scoring),
-`confidence.ts` (the calibrated confidence score), `verify.ts` (the optional
-adversarial review panel), `pricing.ts` (token-cost estimation), `economics.ts`
-(the cost/ship-rate roll-up behind `forge costs`), `tools.ts` (the write-capable
-tools), `minion.ts` (the loop, gates, and best-of-N tournament).
-
-## Why this shape
-
-An agent that writes agents is easy to make impressive in a demo and hard to
-*trust*. The interesting engineering isn't the generation — it's everything
-that makes a generated agent safe to run and honest about its limits:
-
-- **A fixed, read-only tool registry.** A built agent can only be granted tools
-  Forge ships (`web_fetch`, `http_get_json`, `calculator`, `current_datetime`).
-  The builder picks names from that set; anything it invents is dropped before
-  the spec is ever runnable. No filesystem, no shell, no writes — that
-  constraint *is* the v1 safety model, stated plainly rather than assumed.
-- **Self-testing via an independent judge.** Each agent's spec includes 2–4
-  test cases — a real input plus a plain-language bar. `forge test` runs the
-  agent on each and asks a separate LLM judge whether the output cleared the
-  bar. Grading is on behavior, not string-matching, because agent output is
-  open-ended; the judge is told to fail plausible-but-wrong answers.
-- **Self-repair loop.** `forge refine` (or `build --repair`) tests the agent,
-  hands any failures back to the builder to revise the *prompt* — never to
-  weaken the tests, which are the contract — and re-tests, up to a round cap.
-  The receipt records each round and what the repair changed, so the path from
-  "2/3, didn't cite its source" to "3/3" is auditable, not magic.
-- **Auditable runs.** Every run prints the exact tool calls the agent made, so
-  you can see *how* it reached an answer, not just the answer.
-- **One provider seam.** Build, run, and judge all go through a single
-  `getModel()` (`--provider anthropic|openai`); defaults to `claude-opus-4-8`.
-
-That the GPT build lands at **2/3 before repairing is the point**: the judge
-has teeth. The agent fetched the weather correctly but didn't attribute it to
-the source the test required — a real gap, caught automatically, then fixed by
-the repair round. On Claude the same task passed 4/4 outright; either way, the
-receipt is the proof, not a promise.
+It remembers the list it just showed you per thread, so you can follow up with
+"do the second one" or "work on all of them" without repeating yourself. Choosing
+which ticket to run is a pure, unit-tested function
+([`src/linear/select.ts`](src/linear/select.ts)); when a request is ambiguous it
+asks rather than guesses. `forge fleet` is the all-day mode: it watches the ticket
+list and dispatches a minion whenever a ticket is new or its text changed, and a
+ledger keyed by ticket-text hash means it never redoes work.
 
 ## Architecture
 
@@ -388,32 +271,28 @@ forge build "..."         forge refine <name>          forge run <name>
  generateObject →     ┌─ test ─ fail? ─ repair.ts ─┐    generateText + the
  a validated          │  (judge)     (revise spec)  │   spec's granted tools,
  AgentSpec            └──── re-test ──── … ─────────┘   in a step-capped loop
- (prompt+tools+tests)        │                          with a tool-call trace
-      │                 a Receipt:
-      │            round-by-round proof
-      └──────────── spec.ts (zod schema + JSON + receipts) ─────────┘
-                              │           │
-                    tools/registry.ts   judge.ts
-              the fixed, safe tool set   independent LLM grader
 ```
 
-- **`spec.ts`** — the `AgentSpec` zod schema and disk storage. The spec is the
-  compile target; it's re-validated on load, so a hand-edited agent fails
-  loudly instead of at runtime.
-- **`builder.ts`** — one `generateObject` call that designs the agent. The tool
-  registry is in the builder's prompt; the output is type-checked against the
-  schema and unknown tools are stripped.
-- **`refine.ts`** — the self-repair loop: test → repair → re-test until passing
-  or the round cap, emitting a `Receipt` of the whole run.
-- **`repair.ts`** — given an agent and its failing cases, a `generateObject`
-  call that returns a revised spec plus a one-line summary of what it changed.
-- **`runtime.ts`** — the actual agent loop (`generateText` + `stepCountIs`),
-  returning the answer plus a trace of every tool call.
-- **`judge.ts`** — runs an agent's own tests and grades each with a separate
-  `generateObject` verdict. This is the analytics-eval philosophy ("behavior is
-  the ground truth, not text") applied where an LLM judge is the honest tool.
-- **`tools/registry.ts`** — the safe primitives, with `resolveTools()` mapping
-  spec tool-names back to implementations.
+- **`spec.ts`**: the `AgentSpec` zod schema and disk storage, re-validated on load.
+- **`builder.ts`**: one `generateObject` call that designs the agent; unknown
+  tools are stripped against the registry.
+- **`refine.ts` / `repair.ts`**: the self-repair loop and the revision step,
+  emitting a receipt of the whole run.
+- **`runtime.ts`**: the agent loop (`generateText` + `stepCountIs`), returning the
+  answer plus a trace of every tool call.
+- **`judge.ts`**: runs an agent's tests and grades each with a separate verdict.
+  Behavior is the ground truth, not string-matching.
+- **`tools/registry.ts`**: the fixed, safe primitives (`web_fetch`,
+  `http_get_json`, `calculator`, `current_datetime`). A built agent can only be
+  granted tools Forge ships; no filesystem, no shell, no writes. That constraint
+  is the v1 safety model, stated plainly.
+- **`src/minion/`**: the sandbox boundary and role-based permissions
+  (`workspace.ts`), runner detection (`test-runner.ts`), the mutation engine
+  (`mutate.ts`), reproduction mode (`spec.ts`), scoping (`scope.ts`), the per-repo
+  profile (`profile.ts`), the PR-outcome corpus (`corpus.ts`), blast-radius
+  (`risk.ts`), confidence (`confidence.ts`), the adversarial panel (`verify.ts`),
+  cost estimation (`pricing.ts`, `economics.ts`), and the loop itself
+  (`minion.ts`).
 
 ## Running it
 
@@ -422,49 +301,58 @@ cp .env.example .env.local     # set LLM_PROVIDER and one provider's API key
 npm install
 
 npm run forge -- build "<what you want automated>"   # add --repair to auto-fix to passing
-npm run forge -- refine <name>        # test + repair a saved agent until it passes
-npm run forge -- test <name>          # just grade it, no repair
 npm run forge -- run <name> "<input>"
 npm run forge -- receipt <name>       # the build → test → repair record
-npm run forge -- list
-npm run forge -- show <name>          # the generated spec
+
+npm run forge -- tickets              # the sandbox's open tickets
+npm run forge -- minion all           # work every ticket once
+npm run forge -- eval                 # measure the gate on a labeled set (0 unsafe ships)
+npm run forge -- pr <owner/repo> <n>  # fix a real GitHub issue and open a real pull request
+npm run forge -- costs                # token, cost, and time economics (cost per shipped PR)
+
+npm run slack                         # start the Socket Mode bot (needs SLACK_* + LINEAR_API_KEY)
+npm test                              # 91 unit tests for the deterministic core (no API key needed)
 ```
 
-Add `--provider anthropic` or `--provider openai` to any command to override
-the configured provider — the same agent runs on either.
-
-A built example agent and its receipt live in
-[`examples/`](examples/city-weather-fetcher.receipt.json).
+Add `--provider anthropic` or `--provider openai` to any command to override the
+configured provider; the same agent runs on either. Defaults to `claude-opus-4-8`.
 
 ## Roadmap
 
-**Done — Forge (the factory)**
+**Done: Forge (the factory)**
 
-- ✅ Build agents from plain English, with auto-generated acceptance tests.
-- ✅ Independent LLM-judge grading on behavior, not strings.
-- ✅ Self-repair loop — test → repair → re-test, with an audit receipt.
+- Build agents from plain English, with auto-generated acceptance tests.
+- Independent LLM-judge grading on behavior, not strings.
+- Self-repair loop: test, repair, re-test, with an audit receipt.
 
-**Done — Minions (what it makes)**
+**Done: Minions (what it makes)**
 
-- ✅ Autonomous, verified pull requests on a sandbox *and* real GitHub repos — zero unsafe ships on a labeled eval.
-- ✅ A gate that's hard to game — mutation testing + flaky-test guarding beneath the LLM judge.
-- ✅ Adversarial verification panel — independent skeptics with distinct lenses, majority vote to refute (opt-in via `MINION_VERIFIERS`).
-- ✅ Confidence + blast-radius scoring — approved changes ship ready-to-merge or open as a draft, by a tunable threshold.
-- ✅ Best-of-N tournament — independent candidate fixes compete through the full gate; only the strongest ships.
-- ✅ Spec-author / reproduction mode — failing tests for untested bugs, with separation of powers.
-- ✅ Repo-agnostic test-runner detection, ticket/stack-trace scoping, and a per-repo learning profile.
-- ✅ Slack + Linear front door, and an outcome corpus that defends the safety record over time.
-- ✅ Run economics — per-run tokens, estimated cost, and time, with a cost-per-shipped-PR roll-up (`forge costs`).
+- Autonomous, verified pull requests on a sandbox and real GitHub repos, zero
+  unsafe ships on a labeled eval.
+- A gate that is hard to game: mutation testing and flaky-test guarding beneath
+  the LLM judge.
+- Adversarial verification panel, confidence and blast-radius scoring, best-of-N
+  tournament, and reproduction mode with separation of powers.
+- Repo-agnostic runner detection, stack-trace scoping, and a per-repo learning
+  profile.
+- Slack and Linear front door, and an outcome corpus that defends the safety
+  record over time.
+- Run economics: per-run tokens, estimated cost, and time (`forge costs`).
+- A replay console (`web/`) that streams the recorded runs and renders the receipt.
 
 **Next, in order of leverage**
 
-- **Tool synthesis.** Let the builder *write* a new typed tool when a task needs
-  one — sandboxed, behind an approval gate. The real ceiling-remover.
+- **Tool synthesis.** Let the builder write a new typed tool when a task needs
+  one, sandboxed and behind an approval gate.
 - **Hosted, sandboxed runs.** Run minions in an ephemeral container on a server
-  (token-based `gh` auth) for always-on operation that isolates untrusted
-  repo-test execution.
-- **A live web surface.** Watch the build → test → repair loop stream in a
-  browser, with the receipt rendered at the end.
+  for always-on operation that isolates untrusted repo-test execution.
 - **Respond to code review.** A reviewer comments on a minion's PR; the minion
-  reads it, revises through the same gates, and pushes an update — a collaborator,
-  not a one-shot.
+  reads it, revises through the same gates, and pushes an update.
+
+## License
+
+Agent Forge is released under the [MIT License](LICENSE).
+
+---
+
+Built by [Saleha Iftikhar](https://saleha.live).
