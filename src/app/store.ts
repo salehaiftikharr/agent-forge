@@ -36,6 +36,20 @@ export interface RunRow {
   final_total: number | null;
   requires_review: number;
   cancel_requested: number;
+  // GitHub coding runs (kind='github'); null for sandbox runs.
+  kind: string;
+  repo: string | null;
+  issue_number: number | null;
+  github_mode: string | null;
+  open_pr: number;
+  base_branch: string | null;
+  head_branch: string | null;
+  base_sha: string | null;
+  checkout_dir: string | null;
+  pr_number: number | null;
+  pr_url: string | null;
+  pr_state: string | null;
+  pr_draft: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -148,6 +162,58 @@ export class Store {
           ts,
         });
       this.appendEvent(runId, { kind: "queued", label: "Run queued", detail: input.goal, phase: "planned" });
+      this.enqueueJob(runId, "execute");
+    });
+    tx();
+    return this.getRun(runId)!;
+  }
+
+  /** Create a GitHub coding run: work a real repo/issue toward a verified PR. */
+  createGithubRun(input: {
+    workspaceId: string;
+    ownerId?: string;
+    repo: string;
+    issueNumber?: number;
+    goal: string;
+    context?: string;
+    provider: string;
+    githubMode: string; // fake | real
+    openPr: boolean;
+    baseBranch?: string;
+    minionName?: string;
+  }): RunRow {
+    const runId = id("run");
+    const ts = now();
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO runs (id, workspace_id, owner_id, ticket_id, goal, context, state, provider,
+             minion_name, kind, repo, issue_number, github_mode, open_pr, base_branch, created_at, updated_at)
+           VALUES (@id,@workspace_id,@owner_id,@ticket_id,@goal,@context,'queued',@provider,
+             @minion_name,'github',@repo,@issue_number,@github_mode,@open_pr,@base_branch,@ts,@ts)`,
+        )
+        .run({
+          id: runId,
+          workspace_id: input.workspaceId,
+          owner_id: input.ownerId ?? SINGLE_OWNER,
+          ticket_id: input.issueNumber ? `issue-${input.issueNumber}` : "task",
+          goal: input.goal,
+          context: input.context ?? null,
+          provider: input.provider,
+          minion_name: input.minionName ?? "repo-fixer",
+          repo: input.repo,
+          issue_number: input.issueNumber ?? null,
+          github_mode: input.githubMode,
+          open_pr: input.openPr ? 1 : 0,
+          base_branch: input.baseBranch ?? null,
+          ts,
+        });
+      this.appendEvent(runId, {
+        kind: "queued",
+        label: `Queued: ${input.repo}${input.issueNumber ? ` #${input.issueNumber}` : ""}`,
+        detail: input.goal,
+        phase: "planned",
+      });
       this.enqueueJob(runId, "execute");
     });
     tx();

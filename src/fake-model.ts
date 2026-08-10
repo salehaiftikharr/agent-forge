@@ -69,8 +69,10 @@ function classify(options: unknown): { phase: Phase; wantsClamp: boolean; hasWri
   const isJudge = opts.responseFormat?.type === "json";
   const isPlan = serialized.includes("planning only") || serialized.includes("write your plan");
   const phase: Phase = isJudge ? "judge" : isPlan ? "plan" : "implement";
-  // Recognize the two scripted tickets from the prompt text.
-  const wantsClamp = /clamp/i.test(serialized) && /TICKET-002/.test(serialized);
+  // Recognize a clamp request from the prompt text, whether it arrives as the
+  // sandbox ticket (TICKET-002) or a GitHub issue ("Add a clamp(n, min, max)…").
+  const wantsClamp =
+    /clamp/i.test(serialized) && /\bmin\b/i.test(serialized) && /\bmax\b/i.test(serialized);
   const hasWritten = serialized.includes("tool-result");
   return { phase, wantsClamp, hasWritten };
 }
