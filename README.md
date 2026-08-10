@@ -45,6 +45,15 @@ Public pages use a fictional dataset; the evaluation numbers are read from the
 engine's recorded output. See [`web/README.md`](web/README.md) and the rebuild
 notes in [`docs/REBUILD-AUDIT.md`](docs/REBUILD-AUDIT.md).
 
+## Architecture
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/architecture-dark.svg">
+    <img src="brand/architecture.svg" width="1000" alt="How Agent Forge works: you describe a job in plain English; Forge turns it into a Minion with a fixed tool set and its own tests; the Minion works on a sandboxed clone and runs the suite; a verification gate asks whether a previously-failing test now passes; if it does, the Minion opens a pull request, and if it cannot verify a fix it declines and says why. The minion can read the test but cannot write it. One engine drives the CLI, Slack, and the web product.">
+  </picture>
+</p>
+
 ## What it is
 
 - **Forge** takes a plain-English description and designs a working agent for it
