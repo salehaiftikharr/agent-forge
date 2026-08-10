@@ -51,21 +51,41 @@ export async function startSlackBot(): Promise<void> {
   store.ensureWorkspace(DEFAULT_WORKSPACE, { providerMode: githubMode() === "real" ? provider() : "fake" });
   const app = new App({ token: botToken, appToken, socketMode: true });
 
-  // A message (DM or mention) starts or continues a task in its own thread.
+  // Start a task in its own thread. Shared by DM and channel-mention entry points.
+  const startTask = async (
+    text: string,
+    user: string,
+    channel: string,
+    threadTs: string,
+    say: (arg: { text: string; thread_ts?: string }) => Promise<unknown>,
+  ) => {
+    // Strip any <@BOT> mentions so the parser sees the plain request.
+    const clean = text.replace(/<@[^>]+>/g, "").trim();
+    if (!clean) return;
+    const res = handleSlackTask(
+      store,
+      { text: clean, user, channel, threadTs },
+      { workspaceId: DEFAULT_WORKSPACE, provider: provider(), githubMode: githubMode() },
+    );
+    await say({ text: res.reply, thread_ts: threadTs });
+  };
+
+  // Direct messages to the bot.
   // Bolt's middleware types are intentionally loose; the real logic lives in the
   // tested slack-surface module, so we accept `any` at this thin adapter edge.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.message(async (args: any) => {
-    const { message, say } = args;
-    const m = message as { text?: string; user?: string; channel?: string; ts?: string; thread_ts?: string; subtype?: string };
+    const m = args.message as { text?: string; user?: string; channel?: string; ts?: string; thread_ts?: string; subtype?: string };
     if (m.subtype || !m.text || !m.user) return; // ignore edits/bot messages
-    const threadTs = m.thread_ts || m.ts!;
-    const res = handleSlackTask(
-      store,
-      { text: m.text, user: m.user, channel: m.channel ?? "", threadTs },
-      { workspaceId: DEFAULT_WORKSPACE, provider: provider(), githubMode: githubMode() },
-    );
-    await say({ text: res.reply, thread_ts: threadTs });
+    await startTask(m.text, m.user, m.channel ?? "", m.thread_ts || m.ts!, args.say);
+  });
+
+  // Channel mentions: @Agent Forge <task>.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.event("app_mention", async (args: any) => {
+    const e = args.event as { text?: string; user?: string; channel?: string; ts?: string; thread_ts?: string };
+    if (!e.text || !e.user) return;
+    await startTask(e.text, e.user, e.channel ?? "", e.thread_ts || e.ts!, args.say);
   });
 
   const decide = async (actionValue: string, userId: string, decision: "approve" | "reject") => {
