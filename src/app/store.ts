@@ -241,9 +241,12 @@ export class Store {
   }
 
   /**
-   * Record a decision on the pending approval. Idempotent: a second identical
-   * call after the pending row is gone returns the already-decided row instead
-   * of erroring. Approving enqueues the ship job; both are done atomically.
+   * Record a human decision on the pending approval — and ONLY that. It writes
+   * the decision row and a decision event; it does NOT transition the run or
+   * enqueue work. Turning a decision into execution is the worker's job
+   * (reconcile), so the caller of this method — including the web tier — holds
+   * no lifecycle authority. Idempotent: a repeated call after the pending row is
+   * gone returns the already-decided row with changed:false.
    */
   decideApproval(
     runId: string,
@@ -262,25 +265,44 @@ export class Store {
       this.db
         .prepare("UPDATE approvals SET status = ?, decided_by = ?, decided_at = ? WHERE id = ?")
         .run(status, by, now(), pending.id);
-      if (decision === "approve") {
-        this.setRunState(runId, "running", {});
-        this.appendEvent(runId, {
-          kind: "approval_granted",
-          label: "Approved — shipping the verified fix",
-          phase: "approved",
-        });
-        this.enqueueJob(runId, "ship");
-      } else {
-        this.appendEvent(runId, {
-          kind: "approval_rejected",
-          label: "Rejected — the change was held back",
-          phase: "executed",
-        });
-        this.setRunState(runId, "declined", { reason: "Rejected at the approval gate." });
-      }
+      this.appendEvent(runId, {
+        kind: decision === "approve" ? "approval_granted" : "approval_rejected",
+        label: decision === "approve" ? "Approved by the owner" : "Rejected by the owner",
+        detail: by,
+        phase: decision === "approve" ? "approved" : "executed",
+      });
     });
     tx();
-    return { approval: this.db.prepare("SELECT * FROM approvals WHERE id = ?").get(pending.id) as ApprovalRow, changed: true };
+    return {
+      approval: this.db.prepare("SELECT * FROM approvals WHERE id = ?").get(pending.id) as ApprovalRow,
+      changed: true,
+    };
+  }
+
+  /**
+   * Turn decided approvals into state transitions and follow-up work. Called by
+   * the worker each tick, so the worker — never the browser — is the sole
+   * authority over run lifecycle. Safe to call repeatedly (all effects are
+   * idempotent: ship jobs dedupe, same-state transitions are no-ops).
+   */
+  reconcile(): void {
+    const waiting = this.db
+      .prepare("SELECT * FROM runs WHERE state = 'waiting_approval'")
+      .all() as RunRow[];
+    for (const run of waiting) {
+      if (run.cancel_requested === 1) {
+        this.setRunState(run.id, "cancelled", { reason: "Cancelled at the approval gate." });
+        continue;
+      }
+      const appr = this.latestApproval(run.id, "ship");
+      if (!appr) continue;
+      if (appr.status === "approved") {
+        this.setRunState(run.id, "running", {});
+        this.enqueueJob(run.id, "ship");
+      } else if (appr.status === "rejected") {
+        this.setRunState(run.id, "declined", { reason: "Rejected at the approval gate." });
+      }
+    }
   }
 
   // ---- artifacts ---------------------------------------------------------

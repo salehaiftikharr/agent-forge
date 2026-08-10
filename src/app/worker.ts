@@ -21,6 +21,7 @@ function backoffMs(attempts: number): number {
 
 /** Process at most one job. Returns true if a job was claimed. */
 export async function tick(store: Store, owner: string): Promise<boolean> {
+  store.reconcile();
   store.requeueExpired();
   const job = store.claimJob(owner, LEASE_MS);
   if (!job) return false;
