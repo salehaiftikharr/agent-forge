@@ -22,3 +22,6 @@ node_modules
 # observability traces and persistent memory are per-run artifacts
 /.forge-traces/
 /.forge-memory/
+
+# functional app runtime data (db + run workspaces)
+/.forge-data/
