@@ -1,0 +1,149 @@
+{
+  "summary": {
+    "total": 18,
+    "accepted": 1,
+    "rejected": 0,
+    "pending": 13,
+    "declined": 4
+  },
+  "cases": [
+    {
+      "ticketId": "E-DECLINE-ADD5",
+      "minionStatus": "declined",
+      "humanOutcome": "none",
+      "label": "good",
+      "note": "Declined — the minion held back rather than ship a doubtful fix."
+    },
+    {
+      "ticketId": "E-DECLINE-NOOP",
+      "minionStatus": "declined",
+      "humanOutcome": "none",
+      "label": "good",
+      "note": "Declined — the minion held back rather than ship a doubtful fix."
+    },
+    {
+      "ticketId": "E-DECLINE-UPPERCASE",
+      "minionStatus": "declined",
+      "humanOutcome": "none",
+      "label": "good",
+      "note": "Declined — the minion held back rather than ship a doubtful fix."
+    },
+    {
+      "ticketId": "E-SHIP-CAPITALIZE",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; could not read the PR's current state."
+    },
+    {
+      "ticketId": "E-SHIP-CLAMP",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; could not read the PR's current state."
+    },
+    {
+      "ticketId": "E-SHIP-QUERY",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; could not read the PR's current state."
+    },
+    {
+      "ticketId": "E-SHIP-SLUGIFY",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; could not read the PR's current state."
+    },
+    {
+      "ticketId": "MIN-5",
+      "repo": "salehaiftikharr/forge-minions-demo",
+      "prUrl": "https://github.com/salehaiftikharr/forge-minions-demo/pull/5",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; the PR is still open for review."
+    },
+    {
+      "ticketId": "MIN-6",
+      "repo": "salehaiftikharr/forge-minions-demo",
+      "prUrl": "https://github.com/salehaiftikharr/forge-minions-demo/pull/8",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; the PR is still open for review."
+    },
+    {
+      "ticketId": "MIN-7",
+      "repo": "salehaiftikharr/forge-minions-demo",
+      "prUrl": "https://github.com/salehaiftikharr/forge-minions-demo/pull/7",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; the PR is still open for review."
+    },
+    {
+      "ticketId": "MIN-8",
+      "repo": "salehaiftikharr/forge-minions-demo",
+      "prUrl": "https://github.com/salehaiftikharr/forge-minions-demo/pull/6",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; the PR is still open for review."
+    },
+    {
+      "ticketId": "TICKET-001",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; could not read the PR's current state."
+    },
+    {
+      "ticketId": "TICKET-002",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; could not read the PR's current state."
+    },
+    {
+      "ticketId": "TICKET-003",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; could not read the PR's current state."
+    },
+    {
+      "ticketId": "TICKET-004",
+      "minionStatus": "declined",
+      "humanOutcome": "none",
+      "label": "good",
+      "note": "Declined — the minion held back rather than ship a doubtful fix."
+    },
+    {
+      "ticketId": "TICKET-005",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; could not read the PR's current state."
+    },
+    {
+      "ticketId": "issue-1",
+      "repo": "salehaiftikharr/forge-minions-demo",
+      "prUrl": "https://github.com/salehaiftikharr/forge-minions-demo/pull/2",
+      "minionStatus": "shipped",
+      "humanOutcome": "accepted",
+      "label": "good",
+      "note": "Shipped and a human merged it — a confirmed good ship."
+    },
+    {
+      "ticketId": "issue-3",
+      "repo": "salehaiftikharr/forge-minions-demo",
+      "prUrl": "https://github.com/salehaiftikharr/forge-minions-demo/pull/4",
+      "minionStatus": "shipped",
+      "humanOutcome": "pending",
+      "label": "unknown",
+      "note": "Shipped; the PR is still open for review."
+    }
+  ]
+}

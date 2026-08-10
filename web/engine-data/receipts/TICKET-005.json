@@ -1,0 +1,40 @@
+{
+  "ticketId": "TICKET-005",
+  "title": "Add a capitalize(str) helper",
+  "model": "anthropic/claude-opus-4-8",
+  "status": "shipped",
+  "reason": "The capitalize function is correctly implemented and exported, handling all specified cases including the empty string.",
+  "branch": "minion/ticket-005",
+  "steps": 7,
+  "toolCalls": 7,
+  "baselineTests": {
+    "passed": 2,
+    "total": 7
+  },
+  "finalTests": {
+    "ok": false,
+    "passed": 3,
+    "failed": 4,
+    "total": 7
+  },
+  "patch": "diff --git a/src/utils.js b/src/utils.js\nindex b7a7837..1faedfd 100644\n--- a/src/utils.js\n+++ b/src/utils.js\n@@ -26,3 +26,10 @@ export function parseQueryString(qs) {\n }\n \n // TICKET-002: a `clamp(n, min, max)` helper is requested but doesn't exist yet.\n+\n+// TICKET-005: capitalize the first character and lowercase the rest.\n+export function capitalize(str) {\n+  const s = String(str);\n+  if (s === \"\") return \"\";\n+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();\n+}",
+  "usage": {
+    "inputTokens": 20800,
+    "outputTokens": 1792,
+    "totalTokens": 22592
+  },
+  "costUsd": 0.4464,
+  "durationMs": 32460,
+  "confidence": {
+    "score": 0.8,
+    "level": "high"
+  },
+  "risk": {
+    "level": "low",
+    "score": 0,
+    "factors": [
+      "small, self-contained change"
+    ]
+  },
+  "requiresReview": false
+}
