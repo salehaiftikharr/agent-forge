@@ -36,6 +36,16 @@ const PHASE_TAG: Record<string, string> = {
   simulated: "simulated",
 };
 
+// Text-safe ink for the small phase tag, so its text meets AA contrast on the
+// surface (the icon still uses the vivid phase color, which is a graphic).
+function phaseInk(e: TimelineEvent): string {
+  if (e.kind === "error" || e.phase === "failed") return "var(--forge-failed-ink)";
+  if (e.phase === "requested" || e.kind === "approval_requested") return "var(--forge-waiting-ink)";
+  if (e.phase === "recovered" || e.kind === "retry") return "var(--forge-running-ink)";
+  if (e.kind === "verdict") return "var(--forge-shipped-ink)";
+  return "var(--forge-muted)";
+}
+
 export function RunTimeline({ events, className }: { events: TimelineEvent[]; className?: string }) {
   return (
     <ol className={cn("relative space-y-0", className)}>
@@ -62,7 +72,7 @@ export function RunTimeline({ events, className }: { events: TimelineEvent[]; cl
                   </span>
                 )}
                 {tag && (
-                  <span className="rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide" style={{ color, background: `color-mix(in srgb, ${color} 12%, transparent)` }}>
+                  <span className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide" style={{ color: phaseInk(e) }}>
                     {tag}
                   </span>
                 )}

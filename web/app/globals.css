@@ -123,3 +123,45 @@ body {
   70% { transform: scale(1.25); }
   100% { transform: scale(1); }
 }
+
+/* Accessibility: a text-safe accent for buttons (white-on-accent >= 4.5:1) and
+   darker status text for pills (status-on-tint >= 4.5:1). The vivid ember
+   (--forge-accent) stays for marks, dots, and timelines where it is not text. */
+:root {
+  --forge-accent-strong: #b8360f;
+  --forge-on-accent: #ffffff;
+  --forge-shipped-ink: #0c6b45;
+  --forge-declined-ink: #2d5f96;
+  --forge-waiting-ink: #8a5d08;
+  --forge-failed-ink: #b3372f;
+  --forge-running-ink: #b8360f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --forge-accent-strong: #ff6a3d;
+    --forge-on-accent: #0c0e11;
+    --forge-shipped-ink: #4cc796;
+    --forge-declined-ink: #82abe4;
+    --forge-waiting-ink: #e6b054;
+    --forge-failed-ink: #ec7d73;
+    --forge-running-ink: #ff875c;
+  }
+}
+:root[data-theme="dark"] {
+  --forge-accent-strong: #ff6a3d;
+  --forge-on-accent: #0c0e11;
+  --forge-shipped-ink: #4cc796;
+  --forge-declined-ink: #82abe4;
+  --forge-waiting-ink: #e6b054;
+  --forge-failed-ink: #ec7d73;
+  --forge-running-ink: #ff875c;
+}
+:root[data-theme="light"] {
+  --forge-accent-strong: #b8360f;
+  --forge-on-accent: #ffffff;
+  --forge-shipped-ink: #0c6b45;
+  --forge-declined-ink: #2d5f96;
+  --forge-waiting-ink: #8a5d08;
+  --forge-failed-ink: #b3372f;
+  --forge-running-ink: #b8360f;
+}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { statusToken, STATUS_LABEL, RUN_STATE_LABEL } from "@/lib/types";
+import { statusToken, statusInk, STATUS_LABEL, RUN_STATE_LABEL } from "@/lib/types";
 import type { MinionStatus, RunState } from "@/lib/types";
 import { FlaskConical, Cpu } from "lucide-react";
 
@@ -15,7 +15,7 @@ type ButtonProps = {
 const btnBase =
   "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
 const btnVariant = {
-  primary: "bg-accent text-white hover:brightness-110",
+  primary: "bg-[var(--forge-accent-strong)] text-[var(--forge-on-accent)] hover:brightness-[1.08]",
   secondary: "border border-line bg-surface text-ink hover:bg-surface-2",
   ghost: "text-muted hover:text-ink hover:bg-surface-2",
 };
@@ -59,7 +59,7 @@ export function Badge({ children, className }: { children: React.ReactNode; clas
 /** Labels data that comes from deterministic demo fixtures, never live backend. */
 export function DemoBadge({ className }: { className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border border-waiting/40 bg-waiting/10 px-2.5 py-0.5 text-xs font-medium", className)} style={{ color: "var(--forge-waiting)" }}>
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-xs font-medium", className)} style={{ color: "var(--forge-waiting-ink)" }}>
       <FlaskConical size={12} /> Demo data
     </span>
   );
@@ -68,23 +68,23 @@ export function DemoBadge({ className }: { className?: string }) {
 /** Labels data read from the real engine output on disk. */
 export function EngineBadge({ className }: { className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium", className)} style={{ color: "var(--forge-shipped)", borderColor: "color-mix(in srgb, var(--forge-shipped) 40%, transparent)", background: "color-mix(in srgb, var(--forge-shipped) 10%, transparent)" }}>
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-xs font-medium", className)} style={{ color: "var(--forge-shipped-ink)" }}>
       <Cpu size={12} /> From the engine
     </span>
   );
 }
 
-/** Status pill: color plus an always-present text label and a shape dot, so
-    status never depends on color alone (WCAG 1.4.1). */
+/** Status pill: a colored dot (fill) plus an always-present text label in a
+    text-safe ink, so status reads without relying on color alone (WCAG 1.4.1)
+    and the text meets AA contrast on the surface. */
 export function StatusPill({ status, className }: { status: MinionStatus | RunState; className?: string }) {
   const label = (STATUS_LABEL as Record<string, string>)[status] ?? (RUN_STATE_LABEL as Record<string, string>)[status] ?? status;
-  const color = statusToken(status);
   return (
     <span
-      className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", className)}
-      style={{ color, background: `color-mix(in srgb, ${color} 12%, transparent)` }}
+      className={cn("inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-xs font-medium", className)}
+      style={{ color: statusInk(status) }}
     >
-      <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+      <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: statusToken(status) }} />
       {label}
     </span>
   );

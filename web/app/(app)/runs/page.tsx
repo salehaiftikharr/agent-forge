@@ -27,7 +27,7 @@ export default function RunsPage() {
       <div className="mt-8 space-y-8">
         {groups.map((g) => (
           <section key={g.state}>
-            <h2 className="mb-3 text-sm font-semibold text-muted">{RUN_STATE_LABEL[g.state]} <span className="font-normal text-muted/70">({g.items.length})</span></h2>
+            <h2 className="mb-3 text-sm font-semibold text-muted">{RUN_STATE_LABEL[g.state]} <span className="font-normal text-muted">({g.items.length})</span></h2>
             <div className="space-y-2">
               {g.items.map((r) => (
                 <Link key={r.id} href={`/runs/${r.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 hover:bg-surface-2">

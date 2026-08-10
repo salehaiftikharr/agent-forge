@@ -15,8 +15,8 @@ export function RunControls({ state }: { state: RunState }) {
   if (state === "waiting_approval") {
     return (
       <div>
-        <div className="rounded-xl border p-4" style={{ borderColor: "color-mix(in srgb, var(--forge-waiting) 45%, transparent)", background: "color-mix(in srgb, var(--forge-waiting) 8%, transparent)" }}>
-          <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--forge-waiting)" }}>
+        <div className="rounded-xl border p-4" style={{ borderColor: "color-mix(in srgb, var(--forge-waiting-ink) 45%, transparent)", background: "color-mix(in srgb, var(--forge-waiting-ink) 8%, transparent)" }}>
+          <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--forge-waiting-ink)" }}>
             <ShieldCheck size={16} /> This run is waiting for your approval
           </div>
           <p className="mt-1 text-sm text-muted">A write-class action is guarded. Nothing runs until you decide.</p>

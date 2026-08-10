@@ -195,7 +195,7 @@ export function DemoPlayer() {
                   {PROPOSAL.tools.map((t) => (
                     <li key={t.name} className="flex items-center justify-between text-sm">
                       <span className="font-mono text-ink">{t.name}</span>
-                      <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase ${t.permission === "write" ? "" : "text-muted"}`} style={t.permission === "write" ? { color: "var(--forge-waiting)", borderColor: "color-mix(in srgb, var(--forge-waiting) 40%, transparent)" } : undefined}>
+                      <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase ${t.permission === "write" ? "" : "text-muted"}`} style={t.permission === "write" ? { color: "var(--forge-waiting-ink)", borderColor: "color-mix(in srgb, var(--forge-waiting-ink) 40%, transparent)" } : undefined}>
                         {t.permission === "write" && <Lock size={9} />} {t.permission}
                       </span>
                     </li>
@@ -215,8 +215,8 @@ export function DemoPlayer() {
               <RunTimeline events={timeline} />
 
               {stage === 8 && decision === "none" && (
-                <div className="mt-2 rounded-xl border p-4" style={{ borderColor: "color-mix(in srgb, var(--forge-waiting) 45%, transparent)", background: "color-mix(in srgb, var(--forge-waiting) 8%, transparent)" }}>
-                  <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--forge-waiting)" }}>
+                <div className="mt-2 rounded-xl border p-4" style={{ borderColor: "color-mix(in srgb, var(--forge-waiting-ink) 45%, transparent)", background: "color-mix(in srgb, var(--forge-waiting-ink) 8%, transparent)" }}>
+                  <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--forge-waiting-ink)" }}>
                     <ShieldCheck size={16} /> Approve the guarded write?
                   </div>
                   <p className="mt-1 text-sm text-muted">Nothing runs until you decide. This gate is what keeps the Minion from writing on its own.</p>
@@ -256,7 +256,7 @@ function Bubble({ who, children }: { who: "you" | "forge"; children: React.React
   return (
     <div className={isYou ? "flex justify-end" : "flex justify-start"}>
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${isYou ? "bg-accent text-white" : "border border-line bg-surface-2 text-ink"}`}
+        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${isYou ? "bg-[var(--forge-accent-strong)] text-[var(--forge-on-accent)]" : "border border-line bg-surface-2 text-ink"}`}
         style={isYou ? { borderBottomRightRadius: 6 } : { borderBottomLeftRadius: 6 }}
       >
         {children}

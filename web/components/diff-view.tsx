@@ -15,7 +15,7 @@ export function DiffView({ title, body }: { title: string; body: string }) {
                 className="px-3"
                 style={{
                   background: add ? "color-mix(in srgb, var(--forge-shipped) 12%, transparent)" : del ? "color-mix(in srgb, var(--forge-failed) 12%, transparent)" : undefined,
-                  color: add ? "var(--forge-shipped)" : del ? "var(--forge-failed)" : meta ? "var(--forge-muted)" : "var(--forge-ink)",
+                  color: add ? "var(--forge-shipped-ink)" : del ? "var(--forge-failed-ink)" : meta ? "var(--forge-muted)" : "var(--forge-ink)",
                 }}
               >
                 {ln || " "}

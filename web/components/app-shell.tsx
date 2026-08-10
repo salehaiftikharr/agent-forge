@@ -64,7 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavItems pathname={pathname} />
         </div>
         <div className="border-t border-line p-3">
-          <div className="mb-2 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs" style={{ color: "var(--forge-waiting)" }}>
+          <div className="mb-2 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs" style={{ color: "var(--forge-waiting-ink)" }}>
             <FlaskConical size={13} /> Demo mode · session-local
           </div>
           <div className="flex items-center justify-between">
@@ -106,7 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex-1 overflow-y-auto">
                 <NavItems pathname={pathname} onNavigate={() => setOpen(false)} />
               </div>
-              <div className="border-t border-line p-3 text-xs" style={{ color: "var(--forge-waiting)" }}>
+              <div className="border-t border-line p-3 text-xs" style={{ color: "var(--forge-waiting-ink)" }}>
                 <span className="inline-flex items-center gap-2"><FlaskConical size={13} /> Demo mode · session-local</span>
               </div>
             </div>

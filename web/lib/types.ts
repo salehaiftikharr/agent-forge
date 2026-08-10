@@ -158,6 +158,33 @@ export const RUN_STATE_LABEL: Record<RunState, string> = {
   declined: "Declined",
 };
 
+/** Darker, text-safe variant of a status color, for text on a light tint or
+    surface (meets WCAG AA 4.5:1). Use for pill/badge text; use statusToken for
+    the dot/fill. */
+export function statusInk(s: MinionStatus | RunState): string {
+  switch (s) {
+    case "ready":
+    case "completed":
+      return "var(--forge-shipped-ink)";
+    case "working":
+    case "running":
+    case "planning":
+    case "queued":
+    case "retrying":
+      return "var(--forge-running-ink)";
+    case "waiting":
+    case "waiting_approval":
+    case "blocked":
+      return "var(--forge-waiting-ink)";
+    case "declined":
+      return "var(--forge-declined-ink)";
+    case "failed":
+      return "var(--forge-failed-ink)";
+    default:
+      return "var(--forge-muted)";
+  }
+}
+
 /** Maps a status/state to its semantic color token (never the accent unless it
     genuinely means "in progress"). */
 export function statusToken(s: MinionStatus | RunState): string {

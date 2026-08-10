@@ -88,7 +88,7 @@ export function MinionRoster({ minions }: { minions: Minion[] }) {
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted">
                 <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: `var(--forge-${g.status === "ready" ? "shipped" : g.status === "working" ? "running" : g.status === "waiting" ? "waiting" : g.status === "failed" ? "failed" : g.status === "declined" ? "declined" : "idle"})` }} />
                 {STATUS_LABEL[g.status]}
-                <span className="font-normal text-muted/70">({g.items.length})</span>
+                <span className="font-normal text-muted">({g.items.length})</span>
               </h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {g.items.map((m) => (
