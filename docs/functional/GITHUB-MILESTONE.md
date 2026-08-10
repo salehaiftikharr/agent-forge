@@ -46,7 +46,7 @@ engine, same run records, same approvals across all three surfaces.
 - [x] Workbench shows repo, base→head branch, github mode, and a verified draft-PR panel
 - [x] Diff + PR artifacts in the run view; approval gate before the push
 - [x] Playwright: compose → approval → verified draft PR → persists (+ a11y on the composer)
-- [ ] Review panel polish: explicit commands/checks/risks list before approval
+- [x] Review panel spells out the exact external action (push + draft PR target), changed files, and checks before approval
 
 ### Slack (shared engine)
 - [x] Slack task → creates the SAME run in the shared DB (origin/channel/thread/user recorded)

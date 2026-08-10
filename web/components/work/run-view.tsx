@@ -18,6 +18,16 @@ interface PendingApproval {
 type Conn = "connecting" | "live" | "offline" | "done";
 const TERMINAL = new Set<RunState>(["completed", "declined", "cancelled", "failed"]);
 
+/** The files a unified diff touches, so the reviewer sees the blast radius. */
+function changedFilesFromDiff(diff: string): string[] {
+  const files: string[] = [];
+  for (const line of diff.split("\n")) {
+    const m = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+    if (m) files.push(m[2]);
+  }
+  return files;
+}
+
 export function RunView({ initialRun }: { initialRun: Run }) {
   const [run, setRun] = useState<Run>(initialRun);
   const [events, setEvents] = useState<TimelineEvent[]>(initialRun.timeline ?? []);
@@ -141,6 +151,28 @@ export function RunView({ initialRun }: { initialRun: Run }) {
             <h2 className="text-sm font-bold uppercase tracking-wide">Approval required</h2>
           </div>
           <p className="mt-2 text-sm text-ink">{pending.summary}</p>
+          {run.repo && (
+            <div className="mt-3 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs text-muted">
+              <p>
+                <span className="font-medium text-ink">External action:</span> push{" "}
+                <span className="font-mono">{run.headBranch}</span> and open a draft pull request against{" "}
+                <span className="font-mono">{run.baseBranch}</span> in <span className="font-mono">{run.repo}</span>.
+              </p>
+              {pending.preview && changedFilesFromDiff(pending.preview).length > 0 && (
+                <p className="mt-1">
+                  <span className="font-medium text-ink">Changed files:</span>{" "}
+                  <span className="font-mono">{changedFilesFromDiff(pending.preview).join(", ")}</span>
+                </p>
+              )}
+              {run.confidence && (
+                <p className="mt-1">
+                  <span className="font-medium text-ink">Checks:</span> {run.finalTests?.passed ?? 0}/
+                  {run.finalTests?.total ?? 0} tests passing, confidence {run.confidence.score.toFixed(2)} (
+                  {run.confidence.level}), blast radius {run.risk?.level ?? "low"}.
+                </p>
+              )}
+            </div>
+          )}
           {pending.preview && (
             <div className="mt-3">
               <DiffView title="Exactly what will ship" body={pending.preview} />

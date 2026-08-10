@@ -20,6 +20,9 @@ test("github task: compose → approve → verified draft PR, persisted", async 
   await expect(page.getByText("acme/widgets").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Approval required" })).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText("export function clamp")).toBeVisible();
+  // The reviewer sees the exact external action and the blast radius.
+  await expect(page.getByText(/External action:/)).toBeVisible();
+  await expect(page.getByText(/Changed files:/)).toBeVisible();
 
   const url = page.url();
   await page.getByRole("button", { name: "Approve & ship" }).click();
