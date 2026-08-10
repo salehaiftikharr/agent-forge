@@ -42,7 +42,7 @@ engine, same run records, same approvals across all three surfaces.
 ### API & web workbench
 - [x] API: `POST /api/tasks` creates a github run; normalizes owner/name or a pasted URL
 - [x] New-task composer (`/work/github`): repo/URL/issue/goal/base/PR-behavior
-- [ ] Task confirmation (parsed task shown before execution when uncertain)
+- [x] Natural-language intake + confirmation (`/api/tasks/interpret`, shared parser); one clarifying question when ambiguous
 - [x] Workbench shows repo, base→head branch, github mode, and a verified draft-PR panel
 - [x] Diff + PR artifacts in the run view; approval gate before the push
 - [x] Playwright: compose → approval → verified draft PR → persists (+ a11y on the composer)
@@ -58,7 +58,7 @@ engine, same run records, same approvals across all three surfaces.
 ### Security
 - [ ] Repo content treated as untrusted (no prompt-injection authority, no secret access)
 - [ ] Isolated non-root worker execution; resource/time limits; path/symlink validation
-- [ ] Secret redaction across stdout/stderr/traces/prompts/artifacts
+- [x] Secret redaction at the store boundary (events + artifacts; env values + credential patterns), tested
 - [ ] Never push to protected/default; never force-push; never touch unrelated repos
 
 ### Provider/model
