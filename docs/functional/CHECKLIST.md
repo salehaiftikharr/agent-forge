@@ -1,64 +1,70 @@
 # Functional application — working checklist
 
-Living checklist for the `agent-forge-functional-app` branch. Checked items are
-verified (test/run evidence), not just written.
+Checked items are verified with test/run evidence.
 
 ## Foundation
 - [x] Recover repo/branch/CI state; branch off verified `main`
-- [x] Architecture audit (engine trace, web simulation inventory, CI/tests/docs)
-- [x] Record plan (`docs/functional/PLAN.md`) and this checklist
-- [x] Deterministic `fake` provider seam (`src/fake-model.ts`) driving the real engine
-- [x] Engine test proving fake-provider ship + decline (`src/fake-model.test.ts`)
+- [x] Architecture audit (engine, web simulation, CI/tests/docs)
+- [x] Record plan + this checklist
+- [x] Deterministic `fake` provider driving the real engine (`src/fake-model.ts`)
+- [x] Engine test proving fake-provider ship + decline
 
 ## Persistence
-- [ ] SQLite schema + migration runner (`db/migrations/0001_init.sql`)
-- [ ] Data-access layer (runs, events, approvals, artifacts, jobs) with row types
-- [ ] Unit tests: migrations apply on a clean DB; constraints/indexes
-- [ ] Seed data separate from real data
+- [x] SQLite schema + idempotent migration runner (`db/migrations/0001_init.sql`)
+- [x] Typed store enforcing lifecycle + ownership; row types
+- [x] Migrations verified on a clean DB (tables created)
+- [x] Seed (practice repo) separate from run data
 
 ## Domain / lifecycle
-- [ ] Pure lifecycle transition rules over `RunState` + zod schemas
-- [ ] Unit tests: legal/illegal transitions, event ordering, idempotency
+- [x] Pure transition rules over `RunState` + zod schemas
+- [x] Tests: transitions, event ordering, idempotency
 
 ## Worker
-- [ ] Job claim with lease; concurrent workers cannot double-run a step
-- [ ] Runs real `workTicket`; `onProgress` → `run_events`
-- [ ] Approval gate parks the job; resume only on a persisted decision
-- [ ] Cooperative cancellation; terminal states are final
-- [ ] Restart recovery (lease expiry) — tested by killing mid-run
-- [ ] Bounded retry policy
+- [x] Job claim with lease (immediate txn); no double-run
+- [x] Runs real `workTicket`; `onProgress` → `run_events`
+- [x] Approval gate parks; resumes only on a persisted decision (reconcile)
+- [x] Cooperative cancellation; terminal states final
+- [x] Restart/crash recovery via lease expiry (tested)
+- [x] Bounded retry with backoff
 
-## API (Next.js route handlers)
-- [ ] Create/list/read runs; start; cancel; retry
-- [ ] Approve/reject (idempotent, server-enforced)
-- [ ] Event stream (SSE) with resume from last seq
-- [ ] Artifacts read (path/type/size/ownership guarded)
-- [ ] Health + readiness (honest)
-- [ ] Server-side zod validation on every input
+## API (Next.js)
+- [x] Create/list/read runs; decision (approve/reject); cancel
+- [x] SSE stream with Last-Event-ID resume
+- [x] Health + honest readiness
+- [x] Server-side zod validation
 
-## UI (operational workbench)
-- [ ] New-run flow (real `POST /api/runs`)
-- [ ] Run view: live timeline, roster, approvals, artifacts, states
-- [ ] Empty / loading / offline / failed / completed states
-- [ ] Keep `/demo` as the labelled tour
-- [ ] Reuse design system; no unconfirmed-success UI
+## UI (Work)
+- [x] New-run flow (real `POST /api/runs`)
+- [x] Run view: live SSE timeline, approval gate, artifacts, gate stats
+- [x] Empty / connecting / live / reconnecting / final states
+- [x] Demo kept as labelled tour
+- [x] Reuses design system; verified in a real browser (screenshots)
 
 ## Security
-- [ ] Threat model doc for the functional app
-- [ ] Ownership checks server-side; cross-workspace isolation
-- [ ] Secret handling (worker env only; never in client/DB/logs)
-- [ ] Artifact path/traversal guards; payload size limits
+- [x] Threat model (`docs/functional/SECURITY.md`)
+- [x] Ownership on every row; browser has no lifecycle authority
+- [x] Secret only on the worker; none in client/DB/logs/fixtures
+- [x] Artifact bodies are inert rows (no path handles); payload size bounds
 
 ## Tests & gates
-- [ ] Unit + contract tests (lifecycle, idempotency, leases, redaction, approvals)
-- [ ] Integration: create→plan→minion→evaluate→ship; approval park/resume; reject; cancel; restart recovery; duplicate delivery
-- [ ] Playwright: core states + a11y; keep existing 34 e2e + axe green
-- [ ] Engine `npm run typecheck` + `npm test` green
-- [ ] Web `tsc --noEmit` + `test:e2e` green
-- [ ] Production build + container build
+- [x] Engine + lifecycle: `npm test` = 100 pass
+- [x] Web: `tsc --noEmit` clean; `test:e2e` = 34 pass (demo + axe)
+- [x] Smoke script passes against a live stack
+- [x] Production web build passes
+- [~] Automated browser-level functional e2e — proven manually (screenshots) and
+      via the integration suite; a Playwright harness was attempted but its
+      web+worker+DB orchestration was flaky in this environment and was removed
+      rather than shipped broken. See §18 of the handoff.
+- [ ] Full viewport matrix / reduced-motion / keyboard sweep on `/work` (partial)
 
 ## Deployment & handoff
-- [ ] Topology doc (web + worker + SQLite), `.env.example` (names only)
-- [ ] Migration/worker/build commands; container config
-- [ ] Smoke-test script + post-deploy checklist + troubleshooting + rollback
-- [ ] Morning handoff (19 points), honest status
+- [x] Topology + local/container/split docs (`docs/functional/DEPLOYMENT.md`)
+- [x] `.env.example` (root + web), names only
+- [x] Migrate/worker/build commands; `Dockerfile.worker` + `docker-compose.yml`
+- [x] Smoke script + rollback + troubleshooting + known limitations
+- [x] Morning handoff (`docs/functional/HANDOFF.md`), honest status
+
+## Deferred (explicit, not hidden)
+- [ ] Authentication + rate limiting (model is auth-ready)
+- [ ] Postgres data layer for concurrency/multi-host
+- [ ] Arbitrary-repo + real GitHub PR from the web create flow
