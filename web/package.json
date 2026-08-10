@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:functional": "playwright test --config=playwright.functional.config.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

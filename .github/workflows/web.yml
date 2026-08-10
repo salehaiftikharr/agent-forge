@@ -2,10 +2,22 @@ name: web
 
 on:
   push:
-    branches: [main, forge-product-rebuild]
-    paths: ["web/**", ".github/workflows/web.yml"]
+    branches: [main, forge-product-rebuild, agent-forge-functional-app]
+    paths:
+      - "web/**"
+      - "src/**"
+      - "db/**"
+      - "sandbox/**"
+      - "package-lock.json"
+      - ".github/workflows/web.yml"
   pull_request:
-    paths: ["web/**", ".github/workflows/web.yml"]
+    paths:
+      - "web/**"
+      - "src/**"
+      - "db/**"
+      - "sandbox/**"
+      - "package-lock.json"
+      - ".github/workflows/web.yml"
 
 jobs:
   web:
@@ -25,5 +37,28 @@ jobs:
         run: npx tsc --noEmit
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - name: End-to-end + accessibility (builds the production app, then runs 34 e2e + axe)
+      - name: Demo e2e + accessibility (builds the production app, then runs 34 e2e + axe)
         run: npm run test:e2e
+
+  functional:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - name: Install engine deps (worker)
+        run: npm ci
+      - name: Install web deps
+        run: npm ci
+        working-directory: web
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+      - name: Functional e2e (real DB + worker + engine, deterministic provider)
+        run: npm run test:e2e:functional
+        working-directory: web

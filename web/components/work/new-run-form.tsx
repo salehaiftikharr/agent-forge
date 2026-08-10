@@ -63,15 +63,8 @@ export function NewRunForm({ provider }: { provider: string }) {
         <div className="mt-3 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Ticket">
           {PRESETS.map((p) => {
             const selected = ticketId === p.id;
-            const dim = isFake && !p.deterministic;
             return (
-              <label
-                key={p.id}
-                className={cn(
-                  "cursor-pointer",
-                  dim && "opacity-60",
-                )}
-              >
+              <label key={p.id} className="cursor-pointer">
                 <input
                   type="radio"
                   name="ticket"

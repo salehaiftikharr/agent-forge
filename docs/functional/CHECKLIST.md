@@ -51,11 +51,12 @@ Checked items are verified with test/run evidence.
 - [x] Web: `tsc --noEmit` clean; `test:e2e` = 34 pass (demo + axe)
 - [x] Smoke script passes against a live stack
 - [x] Production web build passes
-- [~] Automated browser-level functional e2e — proven manually (screenshots) and
-      via the integration suite; a Playwright harness was attempted but its
-      web+worker+DB orchestration was flaky in this environment and was removed
-      rather than shipped broken. See §18 of the handoff.
-- [ ] Full viewport matrix / reduced-motion / keyboard sweep on `/work` (partial)
+- [x] Automated browser-level functional e2e (`npm run test:e2e:functional`):
+      real DB + worker + engine started in global-setup; 17 tests — full flow
+      (create → stream → approve → ship → persist), decline, empty state, axe
+      a11y on `/work` + `/work/new`, and a 6-viewport no-overflow matrix. Wired
+      into CI as the `functional` job in `web.yml`.
+- [x] Viewport matrix (1440/1280/1024/768/390/360) no-overflow on `/work` pages
 
 ## Deployment & handoff
 - [x] Topology + local/container/split docs (`docs/functional/DEPLOYMENT.md`)

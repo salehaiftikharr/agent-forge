@@ -69,12 +69,19 @@ the model key lives only on the worker. Single-owner mode; auth is additive.
   crash recovery, cancellation).
 - Web: `cd web && npx tsc --noEmit` clean; `npm run test:e2e` → **34 pass** (demo
   e2e + axe a11y, 0 serious/critical).
+- Functional browser e2e: `cd web && npm run test:e2e:functional` → **17 pass**.
+  Starts the real DB + worker + web (deterministic provider) and drives the full
+  flow (create → live stream → approval gate → approve → shipped → persists
+  across reload), the decline path, the empty state, axe a11y on `/work` +
+  `/work/new`, and a 6-viewport no-overflow matrix.
 - Smoke: `node scripts/smoke-functional.mjs` → PASS against a live stack.
 
 ## 11. CI
 PR #2 runs the engine gate (`ci.yml`: typecheck + `npm test`, which includes the
-functional integration suite) and the web gate (`web.yml`: tsc + e2e/axe).
-Check the PR's checks tab for the latest run.
+functional integration suite) and the web workflow (`web.yml`): the `web` job
+(tsc + demo e2e/axe) and the `functional` job (the browser e2e above, standing up
+a real DB + worker + engine on the deterministic provider). Check the PR's checks
+tab for the latest run.
 
 ## 12. Screenshots
 `docs/functional/screenshots/01-approval-gate.png` (live approval gate with the
