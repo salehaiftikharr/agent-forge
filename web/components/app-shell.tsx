@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Hammer, Bot, PlayCircle, Activity, Settings, Menu, X, ArrowLeft, FlaskConical } from "lucide-react";
+import { Hammer, Bot, PlayCircle, Activity, Settings, Menu, X, ArrowLeft, FlaskConical, LayoutDashboard } from "lucide-react";
 import { ForgeWordmark } from "./marks";
 import { ThemeToggle } from "./theme";
 import { cn } from "@/lib/utils";
 
+// "Work" is the real application (live runs over the engine). The remaining
+// entries are the labelled product tour rendered from demo fixtures.
 const NAV = [
+  { href: "/work", label: "Work", icon: LayoutDashboard },
   { href: "/forge", label: "Forge", icon: Hammer },
   { href: "/minions", label: "Minions", icon: Bot },
   { href: "/runs", label: "Runs", icon: PlayCircle },
@@ -64,9 +67,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavItems pathname={pathname} />
         </div>
         <div className="border-t border-line p-3">
-          <div className="mb-2 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs" style={{ color: "var(--forge-waiting-ink)" }}>
-            <FlaskConical size={13} /> Demo mode · session-local
-          </div>
+          <Link href="/demo" className="mb-2 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs hover:text-ink" style={{ color: "var(--forge-waiting-ink)" }}>
+            <FlaskConical size={13} /> Product tour (demo)
+          </Link>
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-1.5 text-xs text-muted hover:text-ink">
               <ArrowLeft size={13} /> Back to site
@@ -107,7 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <NavItems pathname={pathname} onNavigate={() => setOpen(false)} />
               </div>
               <div className="border-t border-line p-3 text-xs" style={{ color: "var(--forge-waiting-ink)" }}>
-                <span className="inline-flex items-center gap-2"><FlaskConical size={13} /> Demo mode · session-local</span>
+                <Link href="/demo" onClick={() => setOpen(false)} className="inline-flex items-center gap-2 hover:text-ink"><FlaskConical size={13} /> Product tour (demo)</Link>
               </div>
             </div>
           </div>

@@ -168,10 +168,19 @@ export class Workspace {
    * per-test map so the caller can detect regressions by name.
    */
   private runOnce(cmd: ReturnType<typeof detectTestCommand>): { parsed: ParsedTests; output: string } {
+    // A minion runs its target repo's suite in a child process. If Forge itself
+    // is launched under Node's test runner (npm test), or a worker is started
+    // from one, NODE_TEST_CONTEXT leaks into the child and makes `node --test`
+    // emit the v8 reporter instead of the TAP we parse — the results become
+    // unreadable and a good fix looks like a failure. Strip it so the sandbox
+    // suite always reports in its own right, regardless of how Forge was run.
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
     const res = spawnSync(cmd.argv[0], cmd.argv.slice(1), {
       cwd: this.root,
       encoding: "utf8",
       timeout: 120_000,
+      env,
     });
     const output = (res.stdout || "") + (res.stderr || "");
     return { parsed: parseTestOutput(cmd.format, output, res.status ?? 1), output };

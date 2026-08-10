@@ -1,0 +1,39 @@
+# Single-service image for the functional Agent Forge (Render Web Service + disk).
+# Runs the web app, the durable worker, and (optionally) the Slack bot in one
+# container, all sharing a SQLite database on the mounted persistent disk. Ships
+# git + gh so the worker can clone repos and open real PRs using a server-side
+# token (GH_TOKEN), never an interactive login.
+FROM node:22-bookworm-slim
+
+# git (clone/push) + gh (issue read, PR create) + curl/ca-certs for the gh binary.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates curl python3 build-essential \
+  && ARCH="$(dpkg --print-architecture)" \
+  && curl -fsSL "https://github.com/cli/cli/releases/download/v2.63.2/gh_2.63.2_linux_${ARCH}.tar.gz" -o /tmp/gh.tgz \
+  && tar -xzf /tmp/gh.tgz -C /tmp \
+  && cp /tmp/gh_*/bin/gh /usr/local/bin/gh \
+  && rm -rf /tmp/gh* /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Engine deps (worker, migrate, slack bot, GitHub adapter).
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Web deps + production build.
+COPY web/package.json web/package-lock.json ./web/
+RUN cd web && npm ci
+
+COPY . .
+RUN cd web && npm run build
+
+ENV NODE_ENV=production \
+    FORGE_DB_PATH=/data/forge.db \
+    FORGE_RUNS_DIR=/data/runs \
+    FORGE_SEED_DIR=/app/sandbox \
+    FORGE_GITHUB=real \
+    LLM_PROVIDER=anthropic \
+    PORT=3001
+
+EXPOSE 3001
+CMD ["bash", "start.sh"]

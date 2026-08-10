@@ -114,6 +114,18 @@ export interface Run {
   timeline: TimelineEvent[];
   artifacts: Artifact[];
   source: DataSource;
+  /** GitHub coding runs (kind === "github"). */
+  kind?: string;
+  repo?: string;
+  issueNumber?: number;
+  baseBranch?: string;
+  headBranch?: string;
+  githubMode?: string;
+  prUrl?: string;
+  prNumber?: number;
+  prState?: string;
+  prDraft?: boolean;
+  origin?: string; // web | slack | cli
 }
 
 export interface EvalReport {

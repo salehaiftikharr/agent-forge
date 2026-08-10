@@ -1,0 +1,22 @@
+# Never copy host build output or native modules into the image (they are built
+# inside it for the target platform), nor secrets or runtime data.
+node_modules
+web/node_modules
+web/.next
+.next
+.git
+.env
+.env.local
+.env.*.local
+.forge-data
+.forge-e2e
+.minion-runs
+minion-receipts
+minion-evals
+.minion-profiles
+.forge-traces
+.forge-memory
+*.log
+test-results
+playwright-report
+.playwright-mcp

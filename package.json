@@ -7,6 +7,9 @@
   "scripts": {
     "forge": "tsx src/cli.ts",
     "slack": "tsx src/slack/bot.ts",
+    "slack:app": "tsx src/app/slack-bot.ts",
+    "migrate": "tsx src/app/migrate.ts",
+    "worker": "tsx src/app/worker.ts",
     "test": "node --import tsx --test --test-reporter=tap \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
@@ -15,9 +18,11 @@
     "@ai-sdk/openai": "^3.0.65",
     "@slack/bolt": "^4.7.3",
     "ai": "^6.0.191",
+    "better-sqlite3": "^13.0.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "tsx": "^4.22.4",
     "typescript": "^5"

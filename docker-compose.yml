@@ -1,0 +1,53 @@
+# Functional Agent Forge — web + worker + shared SQLite on one volume.
+#
+#   docker compose up --build       # offline/deterministic (LLM_PROVIDER=fake)
+#
+# For a live run, put LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY in a .env file
+# next to this one — the key is passed to the WORKER only.
+services:
+  # One-shot: apply migrations, then exit. Web and worker wait for this.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: npm run migrate
+    environment:
+      - FORGE_DB_PATH=/data/forge.db
+    volumes:
+      - forge-data:/data
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      - FORGE_DB_PATH=/data/forge.db
+      - FORGE_RUNS_DIR=/data/runs
+      - FORGE_SEED_DIR=/app/sandbox
+      - LLM_PROVIDER=${LLM_PROVIDER:-fake}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - forge-data:/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      - FORGE_DB_PATH=/data/forge.db
+      - LLM_PROVIDER=${LLM_PROVIDER:-fake}
+    ports:
+      - "3001:3001"
+    volumes:
+      - forge-data:/data
+    restart: unless-stopped
+
+volumes:
+  forge-data: {}
