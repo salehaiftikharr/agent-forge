@@ -10,7 +10,7 @@ import type { LanguageModel } from "ai";
  */
 export type ProviderName = "anthropic" | "openai";
 
-const DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8";
+const DEFAULT_ANTHROPIC_MODEL = "claude-fable-5";
 const DEFAULT_OPENAI_MODEL = "gpt-4.1";
 
 export function resolveProvider(value?: string): ProviderName {
