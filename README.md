@@ -1,6 +1,7 @@
 # Agent Forge
 
 [![CI](https://github.com/salehaiftikharr/agent-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/salehaiftikharr/agent-forge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Agents that do real work, and prove it. **Forge** builds agents from plain
 English. Its **minions** fix real GitHub and Linear tickets and open a pull
@@ -16,6 +17,33 @@ unsafe ships**. They shipped every legitimate fix and refused every bad one. And
 the proof is not a screenshot: a minion read an issue on a public demo repo and
 opened this on its own,
 **[forge-minions-demo#2](https://github.com/salehaiftikharr/forge-minions-demo/pull/2)**.
+
+## In 30 seconds
+
+- **Verification gate.** A minion opens a pull request only when a
+  previously-failing test passes with no regressions, and it cannot edit the
+  test it is judged against.
+- **Zero unsafe ships** on a hand-labeled evaluation: 4/4 good fixes shipped,
+  3/3 bad fixes declined.
+- **One engine, three doors.** The same engine drives a CLI, a Slack bot, and a
+  web product.
+- **Auditable by design.** Every run carries a receipt: steps, tool calls,
+  approvals, refusals, tests, and cost.
+
+## The web product
+
+A full product surface lives in [`web/`](web/): a landing page, a guided demo
+that walks a Minion from proposal to a verified pull request, and an application
+(Forge workbench, Minions roster and detail, Runs with timelines and
+approvals).
+
+```
+cd web && npm install && npm run dev   # http://localhost:3001
+```
+
+Public pages use a fictional dataset; the evaluation numbers are read from the
+engine's recorded output. See [`web/README.md`](web/README.md) and the rebuild
+notes in [`docs/REBUILD-AUDIT.md`](docs/REBUILD-AUDIT.md).
 
 ## What it is
 
@@ -311,6 +339,10 @@ configured provider; the same agent runs on either. Defaults to `claude-opus-4-8
   for always-on operation that isolates untrusted repo-test execution.
 - **Respond to code review.** A reviewer comments on a minion's PR; the minion
   reads it, revises through the same gates, and pushes an update.
+
+## License
+
+Agent Forge is released under the [MIT License](LICENSE).
 
 ---
 
