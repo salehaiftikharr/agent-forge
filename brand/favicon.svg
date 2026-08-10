@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Forge">
+  <!-- Tab form: ink adapts to the browser theme; the ember stays ember. The
+       ember is the brand atom and stays legible at 16px. -->
+  <style>
+    .ink { stroke: #14181d; }
+    .spark { fill: #d8451f; }
+    @media (prefers-color-scheme: dark) { .ink { stroke: #e8eaee; } .spark { fill: #ff6a3d; } }
+  </style>
+  <path class="ink" fill="none" stroke-width="4" stroke-linejoin="round"
+        d="M9 14 H19 L24 21 L29 14 H39 A4 4 0 0 1 43 18 V39 A4 4 0 0 1 39 43 H9 A4 4 0 0 1 5 39 V18 A4 4 0 0 1 9 14 Z"/>
+  <circle class="spark" cx="24" cy="10" r="5"/>
+</svg>

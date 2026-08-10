@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Minion mark">
+  <!-- A Minion is a small specialist stamped from the Forge: the same die with
+       the same struck notch, sized down, carrying a status dot at the shoulder.
+       The status color is a variable so one mark serves ready/working/waiting/
+       failed/paused. Individual Minions differ by an optional inner role glyph. -->
+  <style>.minion-status { fill: var(--minion-status, #37b982); }</style>
+  <path fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"
+        d="M13 17 H21 L24 22 L27 17 H35 A3 3 0 0 1 38 20 V35 A3 3 0 0 1 35 38 H13 A3 3 0 0 1 10 35 V20 A3 3 0 0 1 13 17 Z"/>
+  <circle class="minion-status" cx="35" cy="15" r="5" stroke="var(--forge-surface, #ffffff)" stroke-width="2.5"/>
+</svg>
