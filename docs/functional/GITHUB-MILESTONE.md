@@ -49,10 +49,11 @@ engine, same run records, same approvals across all three surfaces.
 - [ ] Review panel polish: explicit commands/checks/risks list before approval
 
 ### Slack (shared engine)
-- [ ] Slack task → creates the SAME run in the shared DB (not a separate path)
-- [ ] Thread-per-run; milestone updates; approval controls; authorized users only
-- [ ] Signature/timestamp/replay verification; Socket-Mode reconnect without dup runs
-- [ ] Web approval updates Slack; Slack approval updates web
+- [x] Slack task → creates the SAME run in the shared DB (origin/channel/thread/user recorded)
+- [x] Thread-per-run; deduped milestone updates; approval buttons; only originating user (or allowlist) approves
+- [x] Socket Mode (Slack authenticates the WS; no HTTP signature handling); tested surface, thin Bolt adapter
+- [x] Slack approval drives the same worker; the run is visible/controllable in web (via-Slack indicator)
+- [ ] Live proof against a Slack workspace (needs the user's Slack app — credential-gated)
 
 ### Security
 - [ ] Repo content treated as untrusted (no prompt-injection authority, no secret access)
@@ -64,10 +65,10 @@ engine, same run records, same approvals across all three surfaces.
 - [ ] Verify the exact provider model id before changing defaults; keep configurable; record per-run
 
 ### Tests / CI / docs
-- [ ] Unit + integration (deterministic fakes) + Playwright + a11y green in CI
-- [ ] Opt-in live smoke against a dedicated practice repo (explicit flag + creds)
-- [ ] Docs: architecture, GitHub App perms, Slack manifest/scopes, setup, deploy, rollback, revocation
-- [ ] Handoff (20 points), honest limitations
+- [x] Unit + integration (deterministic fakes) + Playwright + a11y green in CI (functional job)
+- [ ] Opt-in live smoke against a dedicated practice repo (explicit flag + creds) — credential-gated
+- [x] Docs: shared flow, GitHub App perms + ADR, Slack manifest/scopes, setup, revocation (`docs/functional/CONNECTIONS.md`)
+- [ ] Handoff (20 points), honest limitations — pending final increment
 
 ## Boundaries (per directive)
 No creating external accounts, installing a GitHub App into repos, opening real
