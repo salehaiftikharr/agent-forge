@@ -40,11 +40,13 @@ engine, same run records, same approvals across all three surfaces.
 - [x] Integration test: github run → engine → minion → verified diff → approval → fake PR → verified (3 tests: ship, prepare-only, idempotent)
 
 ### API & web workbench
-- [ ] API: create a github run from a structured request or a raw NL/URL string
-- [ ] New-task composer: repo/URL/issue/goal/base/PR-behavior/approval-policy
+- [x] API: `POST /api/tasks` creates a github run; normalizes owner/name or a pasted URL
+- [x] New-task composer (`/work/github`): repo/URL/issue/goal/base/PR-behavior
 - [ ] Task confirmation (parsed task shown before execution when uncertain)
-- [ ] Workbench states incl. cloning/inspecting/pushing/opening-PR; PR result panel
-- [ ] Review panel: changed files, diff, commands, checks, risks, proposed commit/PR
+- [x] Workbench shows repo, base→head branch, github mode, and a verified draft-PR panel
+- [x] Diff + PR artifacts in the run view; approval gate before the push
+- [x] Playwright: compose → approval → verified draft PR → persists (+ a11y on the composer)
+- [ ] Review panel polish: explicit commands/checks/risks list before approval
 
 ### Slack (shared engine)
 - [ ] Slack task → creates the SAME run in the shared DB (not a separate path)
