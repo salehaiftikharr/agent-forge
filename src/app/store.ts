@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DB } from "./db";
 import { assertTransition, isTerminal, type RunState } from "./lifecycle";
+import { redactSecrets } from "./redact";
 
 /**
  * Typed data-access for the functional app. All lifecycle and ownership rules
@@ -298,11 +299,14 @@ export class Store {
     const seqRow = this.db
       .prepare("SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM run_events WHERE run_id = ?")
       .get(runId) as { next: number };
+    // Redact any secret before it reaches the ledger (and everything that renders it).
+    const label = redactSecrets(e.label);
+    const detail = e.detail != null ? redactSecrets(e.detail) : null;
     const info = this.db
       .prepare(
         "INSERT INTO run_events (run_id, seq, at, kind, label, detail, phase) VALUES (?,?,?,?,?,?,?)",
       )
-      .run(runId, seqRow.next, now(), e.kind, e.label, e.detail ?? null, e.phase ?? null);
+      .run(runId, seqRow.next, now(), e.kind, label, detail, e.phase ?? null);
     return this.db.prepare("SELECT * FROM run_events WHERE id = ?").get(info.lastInsertRowid) as EventRow;
   }
 
@@ -416,7 +420,8 @@ export class Store {
     a: { kind: string; title: string; body?: string; contentType?: string },
   ): ArtifactRow {
     const aid = id("art");
-    const body = a.body ?? null;
+    const body = a.body != null ? redactSecrets(a.body) : null;
+    const title = redactSecrets(a.title);
     this.db
       .prepare(
         `INSERT INTO artifacts (id, run_id, workspace_id, kind, title, body, content_type, size_bytes, created_at)
@@ -427,7 +432,7 @@ export class Store {
         runId,
         workspaceId,
         a.kind,
-        a.title,
+        title,
         body,
         a.contentType ?? "text/plain",
         body ? Buffer.byteLength(body) : 0,

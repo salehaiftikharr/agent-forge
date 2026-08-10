@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db";
+import { redactSecrets } from "./redact";
 
 /**
  * Web-tier data access. It mirrors the engine store's column layout but is
@@ -139,7 +140,7 @@ export function createRun(input: {
     });
     db.prepare(
       "INSERT INTO run_events (run_id, seq, at, kind, label, detail, phase) VALUES (?,1,?,?,?,?,?)",
-    ).run(runId, ts, "queued", "Run queued", input.goal, "planned");
+    ).run(runId, ts, "queued", "Run queued", redactSecrets(input.goal), "planned");
     db.prepare(
       `INSERT INTO jobs (id, run_id, kind, status, dedupe_key, available_at, created_at, updated_at)
        VALUES (?,?, 'execute', 'queued', ?, ?, ?, ?)`,
@@ -190,7 +191,7 @@ export function createGithubRun(input: {
     });
     db.prepare(
       "INSERT INTO run_events (run_id, seq, at, kind, label, detail, phase) VALUES (?,1,?,?,?,?,?)",
-    ).run(runId, ts, "queued", `Queued: ${input.repo}${input.issueNumber ? ` #${input.issueNumber}` : ""}`, input.goal, "planned");
+    ).run(runId, ts, "queued", `Queued: ${input.repo}${input.issueNumber ? ` #${input.issueNumber}` : ""}`, redactSecrets(input.goal), "planned");
     db.prepare(
       `INSERT INTO jobs (id, run_id, kind, status, dedupe_key, available_at, created_at, updated_at)
        VALUES (?,?, 'execute', 'queued', ?, ?, ?, ?)`,
