@@ -32,3 +32,15 @@ test("github task: compose → approve → verified draft PR, persisted", async 
   await expect(page.getByText("Completed")).toBeVisible();
   await expect(page.getByRole("link", { name: /github\.com\/acme\/widgets\/pull\// })).toBeVisible();
 });
+
+test("natural-language intake interprets a sentence and pre-fills the task", async ({ page }) => {
+  await page.goto("/work/github");
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel(/Describe it in a sentence/).fill("Fix issue #1 in acme/widgets and open a PR");
+  await page.getByRole("button", { name: "Interpret" }).click();
+
+  // Shows what it understood, and fills the structured fields for confirmation.
+  await expect(page.getByText(/Understood:/)).toBeVisible();
+  await expect(page.getByLabel("Repository")).toHaveValue("acme/widgets");
+  await expect(page.getByLabel(/Issue number/)).toHaveValue("1");
+});

@@ -21,6 +21,44 @@ export function GithubTaskForm({ githubMode, provider }: { githubMode: string; p
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Natural-language intake: interpret a sentence and pre-fill the fields, so
+  // you confirm what Agent Forge understood before anything runs.
+  const [nl, setNl] = useState("");
+  const [interpreting, setInterpreting] = useState(false);
+  const [understood, setUnderstood] = useState<string | null>(null);
+  const [clarify, setClarify] = useState<string | null>(null);
+
+  async function interpret() {
+    if (!nl.trim() || interpreting) return;
+    setInterpreting(true);
+    setClarify(null);
+    setUnderstood(null);
+    try {
+      const res = await fetch("/api/tasks/interpret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: nl }),
+      });
+      const { task } = await res.json();
+      if (!task || task.ambiguous || !task.repoFull) {
+        setClarify(task?.clarification ?? "Tell me the repository as `owner/name` or a GitHub URL.");
+        return;
+      }
+      setRepo(task.repoFull);
+      if (task.issueNumber) setIssue(String(task.issueNumber));
+      if (task.baseBranch) setBase(task.baseBranch);
+      setGoal(task.outcome || nl);
+      setOpenPr(Boolean(task.openPr));
+      setUnderstood(
+        `Understood: ${task.mode} in ${task.repoFull}${task.issueNumber ? ` (issue #${task.issueNumber})` : ""} — ${task.openPr ? "will open a draft PR after your approval" : "prepare only, no PR"}. Review below and start.`,
+      );
+    } catch {
+      setClarify("Could not interpret that. Fill the fields below instead.");
+    } finally {
+      setInterpreting(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return; // guard double-submit
@@ -63,6 +101,40 @@ export function GithubTaskForm({ githubMode, provider }: { githubMode: string; p
             " In this mode the run works the practice checkout and produces a clearly-labelled fake PR — no real repository is touched."}
         </p>
       </Card>
+
+      <div>
+        <label htmlFor="nl" className="text-sm font-medium text-ink">
+          Describe it in a sentence <span className="text-muted">(optional)</span>
+        </label>
+        <div className="mt-2 flex gap-2">
+          <input
+            id="nl"
+            value={nl}
+            onChange={(e) => setNl(e.target.value)}
+            placeholder="Fix issue #1 in salehaiftikharr/forge-minion-practice and open a PR"
+            className={fieldCls + " mt-0 flex-1"}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void interpret();
+              }
+            }}
+          />
+          <Button type="button" variant="secondary" onClick={() => void interpret()} disabled={interpreting}>
+            {interpreting ? "Reading…" : "Interpret"}
+          </Button>
+        </div>
+        {understood && (
+          <p className="mt-2 text-xs" style={{ color: "var(--forge-shipped-ink)" }}>
+            {understood}
+          </p>
+        )}
+        {clarify && (
+          <p className="mt-2 text-xs" style={{ color: "var(--forge-waiting-ink)" }}>
+            {clarify}
+          </p>
+        )}
+      </div>
 
       <div>
         <label htmlFor="repo" className="text-sm font-medium text-ink">
