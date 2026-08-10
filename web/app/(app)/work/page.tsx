@@ -27,9 +27,14 @@ export default function WorkPage() {
             </span>
           </p>
         </div>
-        <Button href="/work/new">
-          <Plus size={16} /> New run
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button href="/work/github">
+            <Plus size={16} /> New GitHub task
+          </Button>
+          <Button href="/work/new" variant="secondary">
+            Practice run
+          </Button>
+        </div>
       </div>
 
       {runs.length === 0 ? (
@@ -40,8 +45,8 @@ export default function WorkPage() {
             Start a run and a minion will fix a ticket on a sandboxed copy of the practice repo,
             proving every gate before anything ships.
           </p>
-          <Button href="/work/new" className="mt-1">
-            <Plus size={16} /> Start your first run
+          <Button href="/work/github" className="mt-1">
+            <Plus size={16} /> Start a GitHub task
           </Button>
         </Card>
       ) : (

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, ShieldQuestion, Wifi, WifiOff, CircleCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, ShieldQuestion, Wifi, WifiOff, CircleCheck, Loader2, Github } from "lucide-react";
 import { Card, Button, StatusPill, EngineBadge, SectionLabel, Stat } from "@/components/ui";
 import { RunTimeline } from "@/components/run-timeline";
 import { DiffView } from "@/components/diff-view";
@@ -110,6 +110,14 @@ export function RunView({ initialRun }: { initialRun: Run }) {
             <span className="font-mono text-xs text-muted">{run.model}</span>
             <ConnBadge conn={conn} />
           </div>
+          {run.repo && (
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted">
+              <span className="inline-flex items-center gap-1"><Github size={12} /> {run.repo}</span>
+              {run.issueNumber ? <span>· #{run.issueNumber}</span> : null}
+              {run.headBranch ? <span>· {run.baseBranch} → {run.headBranch}</span> : null}
+              {run.githubMode === "fake" ? <span className="not-italic" style={{ color: "var(--forge-waiting-ink)" }}>· fake mode</span> : null}
+            </p>
+          )}
         </div>
         {!terminal && (
           <Button variant="secondary" size="sm" onClick={cancel} disabled={busy}>
@@ -164,6 +172,24 @@ export function RunView({ initialRun }: { initialRun: Run }) {
 
       {run.reason && (
         <p className="mt-6 rounded-lg border border-line bg-surface-2 px-4 py-3 text-sm text-ink">{run.reason}</p>
+      )}
+
+      {/* Pull request result. */}
+      {run.prUrl && (
+        <Card className="mt-6 p-5">
+          <div className="flex items-center gap-2" style={{ color: "var(--forge-shipped-ink)" }}>
+            <Github size={18} />
+            <h2 className="text-sm font-bold uppercase tracking-wide">Draft pull request</h2>
+          </div>
+          <a href={run.prUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block break-all text-sm text-accent-text underline">
+            {run.prUrl}
+          </a>
+          <p className="mt-1 text-xs text-muted">
+            #{run.prNumber} · {run.prState}
+            {run.prDraft ? " · draft" : ""}
+            {run.githubMode === "fake" ? " · verified by the deterministic adapter (no real repo touched)" : " · verified via the GitHub API"}
+          </p>
+        </Card>
       )}
 
       {/* Artifacts. */}

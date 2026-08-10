@@ -7,10 +7,12 @@ import AxeBuilder from "@axe-core/playwright";
  * not fixtures — and that it survives a reload.
  */
 
-test("empty state invites a first run", async ({ page }) => {
+test("runs page renders with a way to start a GitHub task", async ({ page }) => {
+  // Order-independent: other specs may have created runs already, so assert the
+  // page and its primary call-to-action rather than a strictly-empty list.
   await page.goto("/work");
   await expect(page.getByRole("heading", { name: "Runs" })).toBeVisible();
-  await expect(page.getByText("No runs yet")).toBeVisible();
+  await expect(page.getByRole("link", { name: /New GitHub task/ })).toBeVisible();
 });
 
 test("create a run, stream it live, approve, and ship a persisted artifact", async ({ page }) => {
@@ -47,7 +49,7 @@ test("an impossible ticket is declined, never shipped", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Approval required" })).toHaveCount(0);
 });
 
-for (const path of ["/work", "/work/new"]) {
+for (const path of ["/work", "/work/new", "/work/github"]) {
   test(`no serious or critical accessibility violations on ${path}`, async ({ page }) => {
     await page.goto(path);
     await page.waitForLoadState("networkidle");

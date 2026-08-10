@@ -38,6 +38,18 @@ export interface RunRow {
   final_total: number | null;
   requires_review: number;
   cancel_requested: number;
+  kind: string;
+  repo: string | null;
+  issue_number: number | null;
+  github_mode: string | null;
+  open_pr: number;
+  base_branch: string | null;
+  head_branch: string | null;
+  base_sha: string | null;
+  pr_number: number | null;
+  pr_url: string | null;
+  pr_state: string | null;
+  pr_draft: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -124,6 +136,57 @@ export function createRun(input: {
     db.prepare(
       "INSERT INTO run_events (run_id, seq, at, kind, label, detail, phase) VALUES (?,1,?,?,?,?,?)",
     ).run(runId, ts, "queued", "Run queued", input.goal, "planned");
+    db.prepare(
+      `INSERT INTO jobs (id, run_id, kind, status, dedupe_key, available_at, created_at, updated_at)
+       VALUES (?,?, 'execute', 'queued', ?, ?, ?, ?)`,
+    ).run(mkid("job"), runId, `${runId}:execute`, ts, ts, ts);
+  });
+  tx();
+  return getRun(runId)!;
+}
+
+export function githubMode(): string {
+  return (process.env.FORGE_GITHUB || "fake").toLowerCase();
+}
+
+/** Create a GitHub coding run (authority-free insert; the worker does the rest). */
+export function createGithubRun(input: {
+  repo: string;
+  issueNumber?: number;
+  goal: string;
+  openPr: boolean;
+  baseBranch?: string;
+  workspaceId?: string;
+}): RunRow {
+  const db = getDb();
+  const workspaceId = input.workspaceId ?? DEFAULT_WORKSPACE;
+  ensureWorkspace(workspaceId);
+  const runId = mkid("run");
+  const ts = now();
+  const provider = providerMode();
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO runs (id, workspace_id, owner_id, ticket_id, goal, state, provider, minion_name,
+         kind, repo, issue_number, github_mode, open_pr, base_branch, created_at, updated_at)
+       VALUES (@id,@workspace_id,@owner_id,@ticket_id,@goal,'queued',@provider,'repo-fixer',
+         'github',@repo,@issue_number,@github_mode,@open_pr,@base_branch,@ts,@ts)`,
+    ).run({
+      id: runId,
+      workspace_id: workspaceId,
+      owner_id: SINGLE_OWNER,
+      ticket_id: input.issueNumber ? `issue-${input.issueNumber}` : "task",
+      goal: input.goal,
+      provider,
+      repo: input.repo,
+      issue_number: input.issueNumber ?? null,
+      github_mode: githubMode(),
+      open_pr: input.openPr ? 1 : 0,
+      base_branch: input.baseBranch ?? null,
+      ts,
+    });
+    db.prepare(
+      "INSERT INTO run_events (run_id, seq, at, kind, label, detail, phase) VALUES (?,1,?,?,?,?,?)",
+    ).run(runId, ts, "queued", `Queued: ${input.repo}${input.issueNumber ? ` #${input.issueNumber}` : ""}`, input.goal, "planned");
     db.prepare(
       `INSERT INTO jobs (id, run_id, kind, status, dedupe_key, available_at, created_at, updated_at)
        VALUES (?,?, 'execute', 'queued', ?, ?, ?, ?)`,

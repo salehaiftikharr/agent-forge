@@ -59,6 +59,16 @@ export function toRun(row: RunRow, events: EventRow[], artifacts: ArtifactRow[])
     timeline: events.map(toEvent),
     artifacts: artifacts.map(toArtifact),
     source: "engine",
+    kind: row.kind,
+    repo: row.repo ?? undefined,
+    issueNumber: row.issue_number ?? undefined,
+    baseBranch: row.base_branch ?? undefined,
+    headBranch: row.head_branch ?? undefined,
+    githubMode: row.github_mode ?? undefined,
+    prUrl: row.pr_url ?? undefined,
+    prNumber: row.pr_number ?? undefined,
+    prState: row.pr_state ?? undefined,
+    prDraft: row.pr_draft === 1 ? true : row.pr_draft === 0 ? false : undefined,
   };
 }
 
