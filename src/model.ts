@@ -1,6 +1,7 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { openai } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
+import { createFakeModel } from "./fake-model";
 
 /**
  * The provider seam — the ONLY place that names a vendor. Forge uses one
@@ -26,7 +27,18 @@ export function resolveProvider(value?: string): ProviderName {
  * package reads its own key from the environment (ANTHROPIC_API_KEY /
  * OPENAI_API_KEY).
  */
+/**
+ * The deterministic offline provider (see fake-model.ts). Selected ONLY when the
+ * provider is explicitly "fake" — never a silent default — so it cannot be
+ * reached by accident in production. Used by the web worker's default local/CI
+ * mode and by automated tests to run the real engine without a network or key.
+ */
+function isFake(override?: string): boolean {
+  return (override || process.env.LLM_PROVIDER || "").toLowerCase() === "fake";
+}
+
 export function getModel(override?: string): LanguageModel {
+  if (isFake(override)) return createFakeModel();
   const provider = resolveProvider(override);
   return provider === "openai"
     ? openai(process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL)
@@ -34,6 +46,7 @@ export function getModel(override?: string): LanguageModel {
 }
 
 export function modelLabel(override?: string): string {
+  if (isFake(override)) return "fake/deterministic";
   const provider = resolveProvider(override);
   return provider === "openai"
     ? `openai/${process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL}`
