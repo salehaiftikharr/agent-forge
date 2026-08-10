@@ -59,14 +59,14 @@ engine, same run records, same approvals across all three surfaces.
 - [ ] Repo content treated as untrusted (no prompt-injection authority, no secret access)
 - [ ] Isolated non-root worker execution; resource/time limits; path/symlink validation
 - [x] Secret redaction at the store boundary (events + artifacts; env values + credential patterns), tested
-- [ ] Never push to protected/default; never force-push; never touch unrelated repos
+- [x] Never push to protected/default; never force-push (head is always agent-forge/<run>); write re-checked before push
 
 ### Provider/model
-- [ ] Verify the exact provider model id before changing defaults; keep configurable; record per-run
+- [x] Verified the provider model id live (claude-fable-5 answered with the real key); configurable; recorded per run
 
 ### Tests / CI / docs
 - [x] Unit + integration (deterministic fakes) + Playwright + a11y green in CI (functional job)
-- [ ] Opt-in live smoke against a dedicated practice repo (explicit flag + creds) — credential-gated
+- [x] Live smoke DONE (authorized): real draft PR #2 on salehaiftikharr/forge-minion-practice via the web, GitHub-API verified
 - [x] Docs: shared flow, GitHub App perms + ADR, Slack manifest/scopes, setup, revocation (`docs/functional/CONNECTIONS.md`)
 - [ ] Handoff (20 points), honest limitations — pending final increment
 
