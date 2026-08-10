@@ -116,6 +116,7 @@ export function RunView({ initialRun }: { initialRun: Run }) {
               {run.issueNumber ? <span>· #{run.issueNumber}</span> : null}
               {run.headBranch ? <span>· {run.baseBranch} → {run.headBranch}</span> : null}
               {run.githubMode === "fake" ? <span className="not-italic" style={{ color: "var(--forge-waiting-ink)" }}>· fake mode</span> : null}
+              {run.origin === "slack" ? <span>· via Slack</span> : null}
             </p>
           )}
         </div>

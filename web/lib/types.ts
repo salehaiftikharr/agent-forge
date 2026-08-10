@@ -125,6 +125,7 @@ export interface Run {
   prNumber?: number;
   prState?: string;
   prDraft?: boolean;
+  origin?: string; // web | slack | cli
 }
 
 export interface EvalReport {

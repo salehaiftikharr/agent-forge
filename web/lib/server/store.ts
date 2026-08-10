@@ -50,6 +50,10 @@ export interface RunRow {
   pr_url: string | null;
   pr_state: string | null;
   pr_draft: number | null;
+  origin: string;
+  slack_channel: string | null;
+  slack_thread_ts: string | null;
+  slack_user: string | null;
   created_at: string;
   updated_at: string;
 }

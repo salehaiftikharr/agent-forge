@@ -69,6 +69,7 @@ export function toRun(row: RunRow, events: EventRow[], artifacts: ArtifactRow[])
     prNumber: row.pr_number ?? undefined,
     prState: row.pr_state ?? undefined,
     prDraft: row.pr_draft === 1 ? true : row.pr_draft === 0 ? false : undefined,
+    origin: row.origin ?? "web",
   };
 }
 

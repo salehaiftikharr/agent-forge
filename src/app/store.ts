@@ -50,6 +50,12 @@ export interface RunRow {
   pr_url: string | null;
   pr_state: string | null;
   pr_draft: number | null;
+  origin: string;
+  slack_channel: string | null;
+  slack_thread_ts: string | null;
+  slack_user: string | null;
+  slack_notified_seq: number;
+  slack_notified_state: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -168,7 +174,9 @@ export class Store {
     return this.getRun(runId)!;
   }
 
-  /** Create a GitHub coding run: work a real repo/issue toward a verified PR. */
+  /** Create a GitHub coding run: work a real repo/issue toward a verified PR.
+   * The same method serves the web, Slack, and CLI surfaces — only `origin` and
+   * the optional Slack thread linkage differ, so the run is one shared record. */
   createGithubRun(input: {
     workspaceId: string;
     ownerId?: string;
@@ -181,6 +189,10 @@ export class Store {
     openPr: boolean;
     baseBranch?: string;
     minionName?: string;
+    origin?: string; // web | slack | cli
+    slackChannel?: string;
+    slackThreadTs?: string;
+    slackUser?: string;
   }): RunRow {
     const runId = id("run");
     const ts = now();
@@ -188,9 +200,11 @@ export class Store {
       this.db
         .prepare(
           `INSERT INTO runs (id, workspace_id, owner_id, ticket_id, goal, context, state, provider,
-             minion_name, kind, repo, issue_number, github_mode, open_pr, base_branch, created_at, updated_at)
+             minion_name, kind, repo, issue_number, github_mode, open_pr, base_branch,
+             origin, slack_channel, slack_thread_ts, slack_user, created_at, updated_at)
            VALUES (@id,@workspace_id,@owner_id,@ticket_id,@goal,@context,'queued',@provider,
-             @minion_name,'github',@repo,@issue_number,@github_mode,@open_pr,@base_branch,@ts,@ts)`,
+             @minion_name,'github',@repo,@issue_number,@github_mode,@open_pr,@base_branch,
+             @origin,@slack_channel,@slack_thread_ts,@slack_user,@ts,@ts)`,
         )
         .run({
           id: runId,
@@ -206,6 +220,10 @@ export class Store {
           github_mode: input.githubMode,
           open_pr: input.openPr ? 1 : 0,
           base_branch: input.baseBranch ?? null,
+          origin: input.origin ?? "web",
+          slack_channel: input.slackChannel ?? null,
+          slack_thread_ts: input.slackThreadTs ?? null,
+          slack_user: input.slackUser ?? null,
           ts,
         });
       this.appendEvent(runId, {
@@ -218,6 +236,26 @@ export class Store {
     });
     tx();
     return this.getRun(runId)!;
+  }
+
+  /** Runs linked to a Slack thread — the Slack surface polls these to post
+   * milestones without the worker needing any Slack credentials. */
+  runsWithSlackThread(): RunRow[] {
+    return this.db
+      .prepare("SELECT * FROM runs WHERE slack_thread_ts IS NOT NULL ORDER BY created_at")
+      .all() as RunRow[];
+  }
+
+  findRunByThread(threadTs: string): RunRow | undefined {
+    return this.db
+      .prepare("SELECT * FROM runs WHERE slack_thread_ts = ? ORDER BY created_at DESC LIMIT 1")
+      .get(threadTs) as RunRow | undefined;
+  }
+
+  markSlackNotified(runId: string, seq: number, state: string): void {
+    this.db
+      .prepare("UPDATE runs SET slack_notified_seq = ?, slack_notified_state = ?, updated_at = ? WHERE id = ?")
+      .run(seq, state, now(), runId);
   }
 
   getRun(runId: string): RunRow | undefined {
